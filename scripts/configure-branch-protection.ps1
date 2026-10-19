@@ -1,21 +1,21 @@
 # ======================================================================================
-# SCRIPT DE AUTOMAÇÃO DE GOVERNANÇA GIT (Hooks Locais + Proteção de Branch no GitHub)
+# SCRIPT DE AUTOMACAO DE GOVERNANCA GIT (Hooks Locais + Protecao de Branch no GitHub)
 # ======================================================================================
 # O que este script faz:
 #   1. Ativa os Git Hooks locais (.githooks/pre-commit e pre-push) para impedir commits
 #      e pushes diretos nas branches 'main' e 'develop'.
-#   2. Caso o GitHub CLI (gh) esteja autenticado, configura via API a proteção oficial
+#   2. Caso o GitHub CLI (gh) esteja autenticado, configura via API a protecao oficial
 #      das branches 'develop' e 'main' no GitHub exigindo:
-#      - Pull Request obrigatório a partir de uma branch separada
+#      - Pull Request obrigatorio a partir de uma branch separada
 #      - Status check 'Automated Code Review & Validation' aprovado
-#      - Pelo menos 1 aprovação (Approve) de outro integrante do grupo
+#      - Pelo menos 1 aprovacao (Approve) de outro integrante do grupo
 # ======================================================================================
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "1. Ativando Git Hooks locais (.githooks)..." -ForegroundColor Cyan
 git config core.hooksPath .githooks
-Write-Host "   ✅ Hooks locais ativados! Commits diretos em 'main' e 'develop' estão bloqueados." -ForegroundColor Green
+Write-Host "   [OK] Hooks locais ativados! Commits diretos em 'main' e 'develop' estao bloqueados." -ForegroundColor Green
 
 if (Get-Command gh -ErrorAction SilentlyContinue) {
     Write-Host "`n2. Configurando Branch Protection no GitHub (develop e main)..." -ForegroundColor Cyan
@@ -42,11 +42,11 @@ if (Get-Command gh -ErrorAction SilentlyContinue) {
         try {
             $protectionPayload | gh api -X PUT "repos/biancakimi/projeto-IOT/branches/$branch/protection" `
                 -H "Accept: application/vnd.github+json" --input - | Out-Null
-            Write-Host "   ✅ Proteção de PR + Code Review + 1 Aprovação aplicada em '$branch'!" -ForegroundColor Green
+            Write-Host "   [OK] Protecao de PR + Code Review + 1 Aprovacao aplicada em '$branch'!" -ForegroundColor Green
         } catch {
-            Write-Host "   ⚠️ Não foi possível aplicar via API na branch '$branch' (verifique permissões de admin no repositório ou se a branch já foi enviada ao remoto)." -ForegroundColor Yellow
+            Write-Host "   [AVISO] Nao foi possivel aplicar via API na branch '$branch' (verifique permissoes de admin no repositorio)." -ForegroundColor Yellow
         }
     }
 } else {
-    Write-Host "`nℹ️ GitHub CLI (gh) não encontrado localmente. O workflow '.github/workflows/enforce-branch-protection.yml' cuidará da proteção no GitHub." -ForegroundColor Yellow
+    Write-Host "`n[INFO] GitHub CLI (gh) nao encontrado localmente. O workflow '.github/workflows/enforce-branch-protection.yml' cuidara da protecao no GitHub." -ForegroundColor Yellow
 }
