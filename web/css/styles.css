@@ -1,0 +1,24 @@
+/*
+ * ======================================================================================
+ * PROJETO FINAL IoT (UNIFESP) — ESTILOS DO PAINEL WEB (styles.css)
+ * ======================================================================================
+ * Descrição:
+ *   Folha de estilos para o dashboard responsivo da Estufa Inteligente:
+ *   - Grid de medidores (Gauges) para Temperatura, Umidade, Luminosidade e Sinal LoRa.
+ *   - Controles deslizantes (Sliders) para posicionamento das persianas (0° a 180°).
+ *   - Botões de acionamento dos 4 Relés e indicadores luminosos de status/alarme.
+ * ======================================================================================
+ */
+
+:root {
+  --bg-primary: #0f172a;
+  --text-primary: #f8fafc;
+  --accent-green: #22c55e;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}

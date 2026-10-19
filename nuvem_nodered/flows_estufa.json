@@ -1,0 +1,19 @@
+[
+  {
+    "id": "tab_estufa_iot",
+    "type": "tab",
+    "label": "SmartGreenhouse LoRa — Fluxo Principal",
+    "disabled": false,
+    "info": "Arquivo destinado à exportação do fluxo Node-RED da Etapa de Nuvem (MQTT -> Banco de Dados Histórico -> Dashboard /ui)."
+  },
+  {
+    "id": "comment_instrucoes",
+    "type": "comment",
+    "z": "tab_estufa_iot",
+    "name": "TODO: Importar nós mqtt-in (telemetria), json, banco de dados (SQLite/PostgreSQL), gauges e mqtt-out (comandos)",
+    "info": "Substitua este arquivo pela exportação JSON do Node-RED após construir os fluxos.",
+    "x": 380,
+    "y": 100,
+    "wires": []
+  }
+]

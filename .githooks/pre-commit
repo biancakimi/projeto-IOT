@@ -1,0 +1,29 @@
+#!/bin/sh
+# ======================================================================================
+# GIT HOOK LOCAL (pre-commit): Bloqueia commits diretos em 'main' e 'develop'
+# ======================================================================================
+# Regra do Repositório:
+#   Todos os commits após a estruturação inicial devem ser feitos em uma branch separada
+#   (ex: feature/minha-tarefa, fix/ajuste-sensor) e integrados via Pull Request para a
+#   branch 'develop' com Code Review automatizado e aprovação de outro membro do grupo.
+# ======================================================================================
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "develop" ]; then
+  echo "================================================================================"
+  echo "❌ COMMIT BLOQUEADO NA BRANCH '$BRANCH'!"
+  echo "--------------------------------------------------------------------------------"
+  echo "Pela regra de automação do projeto, commits diretos em 'main' ou 'develop'"
+  echo "não são permitidos."
+  echo ""
+  echo "👉 Crie uma branch separada para suas alterações:"
+  echo "   git checkout -b feature/nome-da-sua-alteracao"
+  echo ""
+  echo "Depois faça o push da sua branch e abra um Pull Request para a branch 'develop'"
+  echo "(exige Code Review automatizado + aprovação de outro integrante do grupo)."
+  echo "================================================================================"
+  exit 1
+fi
+
+exit 0
