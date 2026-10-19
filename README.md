@@ -1,4 +1,4 @@
-# 🌱 SmartGreenhouse LoRa — Sistema IoT de Monitoramento e Automação de Estufa Remota
+# SmartGreenhouse LoRa — Sistema IoT de Monitoramento e Automação de Estufa Remota
 
 ![ESP32](https://img.shields.io/badge/Hardware-ESP32%20LoRa%20915MHz-blue?style=flat-square&logo=espressif)
 ![Protocolo](https://img.shields.io/badge/R%C3%A1dio-LoRa%20P2P%20%7C%20MQTT-orange?style=flat-square)
@@ -12,7 +12,25 @@ Sistema completo de **Internet das Coisas (IoT)** para monitoramento microclimá
 
 ---
 
-## 📌 Visão Geral do Sistema
+## Sumário
+
+1. [Visão Geral do Sistema](#visão-geral-do-sistema)
+2. [Arquitetura de Comunicação](#arquitetura-de-comunicação)
+3. [Funcionalidades e Modos de Operação](#funcionalidades-e-modos-de-operação)
+   - [1. Modo Automático (Controle Local Resiliente)](#1-modo-automático-controle-local-resiliente)
+   - [2. Modo Manual (Override Remoto pelo Site / Node-RED)](#2-modo-manual-override-remoto-pelo-site--node-red)
+4. [Hardware e Pinagem (Nó Estufa — PCI)](#hardware-e-pinagem-nó-estufa--pci)
+5. [Protocolo de Mensagens (LoRa & MQTT)](#protocolo-de-mensagens-lora--mqtt)
+   - [Pacotes LoRa (915 MHz)](#pacotes-lora-915-mhz)
+   - [Tópicos MQTT](#tópicos-mqtt)
+6. [Estrutura do Repositório](#estrutura-do-repositório)
+7. [Fluxo de Trabalho Git e Automação de Pull Requests](#fluxo-de-trabalho-git-e-automação-de-pull-requests)
+8. [Como Executar o Projeto](#como-executar-o-projeto)
+9. [Integrantes e Divisão de Responsabilidades](#integrantes-e-divisão-de-responsabilidades)
+
+---
+
+## Visão Geral do Sistema
 
 Estufas de cultivo geralmente estão afastadas dos pontos de acesso de internet. Para contornar essa limitação, o **SmartGreenhouse LoRa** divide a solução em três camadas:
 
@@ -25,11 +43,11 @@ Estufas de cultivo geralmente estão afastadas dos pontos de acesso de internet.
 
 ---
 
-## 🏗️ Arquitetura de Comunicação
+## Arquitetura de Comunicação
 
 ```mermaid
 flowchart LR
-    subgraph Estufa["🌱 Nó Estufa (PCI Remota)"]
+    subgraph Estufa["Nó Estufa (PCI Remota)"]
         direction TB
         LDR["Sensor LDR"] --> ESP_EST["ESP32 LoRa #1\n(915 MHz)"]
         DHT["Sensor DHT11"] --> ESP_EST
@@ -38,15 +56,15 @@ flowchart LR
         ESP_EST --> ALARME["LEDs + Buzzer"]
     end
 
-    subgraph Enlace["📡 Rádio LoRa"]
+    subgraph Enlace["Rádio LoRa"]
         RF(("915 MHz\nBidirecional"))
     end
 
-    subgraph Gateway["🌐 Nó Gateway"]
+    subgraph Gateway["Nó Gateway"]
         ESP_GW["ESP32 LoRa #2\n(Bridge LoRa <-> MQTT\n+ Firmware OTA)"]
     end
 
-    subgraph Cloud["☁️ Nuvem & Gerenciamento Web"]
+    subgraph Cloud["Nuvem & Gerenciamento Web"]
         BROKER["Broker MQTT Cloud\n(TLS / WSS)"]
         NODERED["Node-RED\n(Ingestão + Dashboard)"]
         DB[("Banco de Dados\n(Histórico Cloud)")]
@@ -64,9 +82,9 @@ flowchart LR
 
 ---
 
-## ⚙️ Funcionalidades e Modos de Operação
+## Funcionalidades e Modos de Operação
 
-### 🤖 1. Modo Automático (Controle Local Resiliente)
+### 1. Modo Automático (Controle Local Resiliente)
 O Nó Estufa ajusta continuamente o microclima com base nos limiares configurados:
 * **Controle Gradual das Persianas (Servomotores):**
   * **Sombreamento Térmico ($30^\circ$):** Acionado quando a luminosidade é muito alta (`> 80%`) acompanhada de elevação de temperatura (`> 28 °C`), reduzindo a insolação direta.
@@ -80,7 +98,7 @@ O Nó Estufa ajusta continuamente o microclima com base nos limiares configurado
 * **Alarme Audiovisual Local (LEDs + Buzzer):**
   * Sinalização por LEDs de estado (Normal, Manual, Crítico) e acionamento sonoro do **Buzzer** em situações de temperatura crítica (`>= 35 °C`) ou movimentação das persianas.
 
-### 🎛️ 2. Modo Manual (Override Remoto pelo Site / Node-RED)
+### 2. Modo Manual (Override Remoto pelo Site / Node-RED)
 Através do painel web, o operador pode assumir o controle manual a qualquer momento:
 * Ajuste fino do ângulo de abertura das persianas ($0^\circ$ a $180^\circ$) por *slider* ou botões de atalho (*Fechada*, *Meia-Luz*, *Aberta*).
 * Acionamento individual em tempo real de cada um dos 4 canais do relé.
@@ -89,7 +107,7 @@ Através do painel web, o operador pode assumir o controle manual a qualquer mom
 
 ---
 
-## 🔌 Hardware e Pinagem (Nó Estufa — PCI)
+## Hardware e Pinagem (Nó Estufa — PCI)
 
 A Placa de Circuito Impresso (PCI) do Nó Estufa respeita os pinos dedicados ao transceptor SPI LoRa SX1276 (`GPIO 5, 14, 18, 19, 23, 26`) e inclui desacoplamento capacitivo ($100\,\mu\text{F}$) no barramento de $5\text{V}$ dos servomotores.
 
@@ -109,7 +127,7 @@ A Placa de Circuito Impresso (PCI) do Nó Estufa respeita os pinos dedicados ao 
 
 ---
 
-## 📡 Protocolo de Mensagens (LoRa & MQTT)
+## Protocolo de Mensagens (LoRa & MQTT)
 
 ### Pacotes LoRa (915 MHz)
 * **Telemetria (Estufa $\rightarrow$ Gateway):**
@@ -132,7 +150,7 @@ A Placa de Circuito Impresso (PCI) do Nó Estufa respeita os pinos dedicados ao 
 
 ---
 
-## 📂 Estrutura do Repositório
+## Estrutura do Repositório
 
 ```text
 projeto-IOT/
@@ -173,7 +191,7 @@ projeto-IOT/
 
 ---
 
-## 🔀 Fluxo de Trabalho Git e Automação de Pull Requests
+## Fluxo de Trabalho Git e Automação de Pull Requests
 
 Este repositório conta com automação de governança (`.githooks/` e **GitHub Actions**) que **bloqueia commits diretos nas branches `main` e `develop`**. Todo desenvolvimento deve seguir o fluxo abaixo:
 
@@ -199,7 +217,7 @@ Este repositório conta com automação de governança (`.githooks/` e **GitHub 
 
 ---
 
-## 🚀 Como Executar o Projeto
+## Como Executar o Projeto
 
 1. **Firmware dos ESP32 LoRa (`firmware/`):**
    * Instale na Arduino IDE / PlatformIO as bibliotecas `LoRa` (por Sandeep Mistry), `DHT sensor library`, `ESP32Servo`, `PubSubClient` e `ArduinoJson`.
@@ -212,7 +230,7 @@ Este repositório conta com automação de governança (`.githooks/` e **GitHub 
 
 ---
 
-## 👥 Integrantes e Divisão de Responsabilidades
+## Integrantes e Divisão de Responsabilidades
 
 | Frente / Etapa do Projeto | Descrição das Entregas sob Responsabilidade | Nome do(a) Integrante | RA | GitHub |
 | :--- | :--- | :---: | :---: | :---: |
