@@ -1,11 +1,11 @@
 # SmartGreenhouse LoRa — Sistema IoT de Monitoramento e Automação de Estufa Remota
 
-![ESP32](https://img.shields.io/badge/Hardware-ESP32%20LoRa%20915MHz-blue?style=flat-square&logo=espressif)
-![Protocolo](https://img.shields.io/badge/R%C3%A1dio-LoRa%20P2P%20%7C%20MQTT-orange?style=flat-square)
+![ESP32](https://img.shields.io/badge/Hardware-ESP32--S3%20LoRa%20915MHz%20(Heltec%20V3)-blue?style=flat-square&logo=espressif)
+![Protocolo](https://img.shields.io/badge/R%C3%A1dio-LoRa%20SX1262%20%7C%20MQTT-orange?style=flat-square)
 ![Nuvem](https://img.shields.io/badge/Nuvem-Node--RED%20%7C%20PostgreSQL-red?style=flat-square&logo=nodered)
 ![Web](https://img.shields.io/badge/Web%20Dashboard-GitHub%20Pages-success?style=flat-square&logo=github)
 
-Sistema completo de **Internet das Coisas (IoT)** para monitoramento microclimático e controle automatizado de uma **estufa agrícola remota** sem cobertura Wi-Fi local. O projeto utiliza dois microcontroladores **ESP32 LoRa (915 MHz)** operando em arquitetura *Nó Sensor/Atuador $\leftrightarrow$ Gateway*, integrados a um broker **MQTT**, fluxos de automação em **Node-RED**, persistência histórica em **Banco de Dados em Nuvem** e uma **Aplicação Web de Gerenciamento Remoto**.
+Sistema completo de **Internet das Coisas (IoT)** para monitoramento microclimático e controle automatizado de uma **estufa agrícola remota** sem cobertura Wi-Fi local. O projeto utiliza dois microcontroladores **ESP32-S3 LoRa 915 MHz (Heltec WiFi LoRa 32 V3)** operando em arquitetura *Nó Sensor/Atuador $\leftrightarrow$ Gateway*, integrados a um broker **MQTT**, fluxos de automação em **Node-RED**, persistência histórica em **Banco de Dados em Nuvem** e uma **Aplicação Web de Gerenciamento Remoto**.
 
 > **Universidade Federal de São Paulo (UNIFESP)** — Instituto de Ciência e Tecnologia (ICT - SJC)  
 > **Disciplina:** Internet das Coisas (IdC) — Prof. Dr. Gabriel de Freitas Fernandes
@@ -19,7 +19,7 @@ Sistema completo de **Internet das Coisas (IoT)** para monitoramento microclimá
 3. [Funcionalidades e Modos de Operação](#funcionalidades-e-modos-de-operação)
    - [1. Modo Automático (Controle Local Resiliente)](#1-modo-automático-controle-local-resiliente)
    - [2. Modo Manual (Override Remoto pelo Site / Node-RED)](#2-modo-manual-override-remoto-pelo-site--node-red)
-4. [Hardware e Pinagem (Nó Estufa — PCI)](#hardware-e-pinagem-nó-estufa--pci)
+4. [Hardware e Pinagem (Nó Estufa — Heltec V3)](#hardware-e-pinagem-nó-estufa--heltec-v3)
 5. [Protocolo de Mensagens (LoRa & MQTT)](#protocolo-de-mensagens-lora--mqtt)
    - [Pacotes LoRa (915 MHz)](#pacotes-lora-915-mhz)
    - [Tópicos MQTT](#tópicos-mqtt)
@@ -32,14 +32,14 @@ Sistema completo de **Internet das Coisas (IoT)** para monitoramento microclimá
 
 ## Visão Geral do Sistema
 
-Estufas de cultivo geralmente estão afastadas dos pontos de acesso de internet. Para contornar essa limitação, o **SmartGreenhouse LoRa** divide a solução em três camadas:
+Estufas de cultivo frequentemente estão afastadas de pontos de acesso Wi-Fi. Para contornar essa limitação e garantir alta confiabilidade, o **SmartGreenhouse LoRa** organiza a solução em três camadas:
 
-1. **Nó Estufa (ESP32 LoRa #1 — Remoto):** Instalado na estufa em uma **Placa de Circuito Impresso (PCI)** dedicada. Realiza a leitura de **luminosidade (LDR)**, **temperatura e umidade do ar (DHT11)**, controla a abertura gradual das **persianas via servomotores**, aciona **4 cargas de potência via Módulo Relé** (Exaustor, Iluminação *Grow LED*, Irrigação/Nebulização e Aquecedor) e emite alertas locais (**LEDs de status e Buzzer**). Possui modo de operação autônomo (*fail-safe* local) caso o link de rádio caia.
-2. **Nó Gateway (ESP32 LoRa #2 — Central):** Localizado em área com recepção Wi-Fi. Recebe os pacotes LoRa em 915 MHz do Nó Estufa, anexa indicadores de qualidade de enlace (`RSSI` e `SNR`) e publica os dados via **MQTT** na nuvem, além de retransmitir comandos vindos da web para a estufa. Conta com suporte a **atualização remota de firmware (OTA)**.
+1. **Nó Estufa (ESP32-S3 Heltec WiFi LoRa 32 V3 — Remoto):** Instalado na estufa em uma placa/circuito dedicado. Realiza a leitura contínua de **luminosidade (LDR)** e **temperatura e umidade do ar (DHT11)**, exibe o diagnóstico no **Display OLED SSD1306 integrado**, controla o ângulo da **persiana via 1 servomotor**, aciona **4 saídas de potência via Ponte H L298N (ZX-040)** (Ventoinha 5V de exaustão, LED de cultivo/iluminação, LED simulador de irrigação e LED simulador de aquecedor) e sinaliza status localmente (**LEDs Verde/Vermelho e Buzzer**). Possui controle autônomo local (*fail-safe*) caso o link de rádio caia.
+2. **Nó Gateway (ESP32-S3 Heltec WiFi LoRa 32 V3 — Central):** Localizado na sede com conexão Wi-Fi. Recebe os pacotes LoRa em 915 MHz (via transceptor Semtech SX1262), registra a qualidade de enlace (`RSSI` e `SNR`) e publica os dados via **MQTT** na nuvem, além de retransmitir comandos recebidos da interface web para a estufa. Conta com suporte a **atualização remota de firmware (OTA)**.
 3. **Nuvem, Banco de Dados e Site Web:**
-   * **Node-RED:** Orquestra a ingestão dos pacotes MQTT, aplica regras de negócio/alertas, persiste os registros no banco de dados e disponibiliza o painel de controle `/ui`.
-   * **Banco de Dados Histórico (Supabase / PostgreSQL):** Armazena a série temporal completa de sensores e estado dos atuadores.
-   * **Site Web de Controle (`web/`):** Interface web responsiva hospedada neste próprio repositório via **GitHub Pages**, conectada em tempo real via **MQTT over WebSockets (WSS)** e integrada à API do banco para visualização de gráficos históricos.
+   * **Node-RED:** Orquestra a ingestão dos pacotes MQTT, executa regras de negócio e limites de alarme, persiste os registros no banco de dados e disponibiliza o painel de controle `/ui`.
+   * **Banco de Dados Histórico (Supabase / PostgreSQL):** Armazena a série temporal completa de leituras dos sensores, posições da persiana e estados das saídas.
+   * **Site Web de Controle (`web/`):** Interface web responsiva hospedada diretamente neste repositório via **GitHub Pages**, conectada em tempo real via **MQTT over WebSockets (WSS)** e integrada à API do banco para visualização de gráficos históricos.
 
 ---
 
@@ -47,25 +47,25 @@ Estufas de cultivo geralmente estão afastadas dos pontos de acesso de internet.
 
 ```mermaid
 flowchart LR
-    subgraph Estufa["Nó Estufa (PCI Remota)"]
+    subgraph Estufa["Nó Estufa (Heltec V3 Remota)"]
         direction TB
-        LDR["Sensor LDR"] --> ESP_EST["ESP32 LoRa #1\n(915 MHz)"]
-        DHT["Sensor DHT11"] --> ESP_EST
-        ESP_EST --> SERVO["Servomotores\n(Persianas 0°–180°)"]
-        ESP_EST --> RELE["Relé 4 Canais\n(Exaustor | Grow LED |\nIrrigação | Aquecedor)"]
-        ESP_EST --> ALARME["LEDs + Buzzer"]
+        LDR["Sensor LDR (GPIO 4)"] --> ESP_EST["ESP32-S3 Heltec V3\n+ OLED SSD1306"]
+        DHT["Sensor DHT11 (GPIO 5)"] --> ESP_EST
+        ESP_EST --> SERVO["1x Servomotor\n(Persiana 0°–180° - GPIO 6)"]
+        ESP_EST --> L298N["Driver Ponte H L298N (ZX-040)\n(OUT1 Ventoinha | OUT2 LED Cultivo |\nOUT3 Irrigação | OUT4 Aquecedor)"]
+        ESP_EST --> ALARME["LEDs Status + Buzzer (GPIO 40, 41, 42)"]
     end
 
-    subgraph Enlace["Rádio LoRa"]
-        RF(("915 MHz\nBidirecional"))
+    subgraph Enlace["Rádio LoRa 915 MHz"]
+        RF(("Semtech SX1262\nP2P Bidirecional"))
     end
 
-    subgraph Gateway["Nó Gateway"]
-        ESP_GW["ESP32 LoRa #2\n(Bridge LoRa <-> MQTT\n+ Firmware OTA)"]
+    subgraph Gateway["Nó Gateway (Heltec V3 Central)"]
+        ESP_GW["ESP32-S3 Heltec V3\n(Bridge LoRa <-> MQTT\n+ Firmware OTA)"]
     end
 
     subgraph Cloud["Nuvem & Gerenciamento Web"]
-        BROKER["Broker MQTT Cloud\n(TLS / WSS)"]
+        BROKER["Broker MQTT Cloud\n(TLS 8883 / WSS 8884)"]
         NODERED["Node-RED\n(Ingestão + Dashboard)"]
         DB[("Banco de Dados\n(Histórico Cloud)")]
         SITE["Site Web Responsivo\n(GitHub Pages)"]
@@ -73,7 +73,7 @@ flowchart LR
 
     ESP_EST <==>|"Telemetria & Comandos"| RF
     RF <==>|"RSSI / SNR"| ESP_GW
-    ESP_GW <==>|"Wi-Fi (MQTT)"| BROKER
+    ESP_GW <==>|"Wi-Fi (MQTT TLS)"| BROKER
     BROKER <==>|"Pub/Sub"| NODERED
     NODERED ==>|"INSERT"| DB
     BROKER <==>|"WebSockets (WSS)"| SITE
@@ -85,68 +85,81 @@ flowchart LR
 ## Funcionalidades e Modos de Operação
 
 ### 1. Modo Automático (Controle Local Resiliente)
-O Nó Estufa ajusta continuamente o microclima com base nos limiares configurados:
-* **Controle Gradual das Persianas (Servomotores):**
-  * **Sombreamento Térmico ($30^\circ$):** Acionado quando a luminosidade é muito alta (`> 80%`) acompanhada de elevação de temperatura (`> 28 °C`), reduzindo a insolação direta.
-  * **Abertura Plena ($90^\circ$):** Acionada em condições normais de luz diurna (`30% a 80%`) para maximizar a iluminação natural e a renovação de ar.
-  * **Isolamento Noturno ($0^\circ$):** Fecha totalmente as persianas à noite ou sob baixíssima temperatura (`< 18 °C`) para conservar calor.
-* **Acionamento do Módulo Relé de 4 Canais:**
-  * **Canal 1 — Exaustor/Ventilador:** Liga automaticamente quando `Temperatura > 28 °C` ou `Umidade > 80%`.
-  * **Canal 2 — Iluminação Artificial (Grow LED):** Liga quando `Luminosidade < 30%` durante o fotoperíodo diurno.
-  * **Canal 3 — Nebulização / Irrigação:** Acionado quando `Umidade < 45%`.
-  * **Canal 4 — Aquecedor:** Acionado quando `Temperatura < 15 °C`.
-* **Alarme Audiovisual Local (LEDs + Buzzer):**
-  * Sinalização por LEDs de estado (Normal, Manual, Crítico) e acionamento sonoro do **Buzzer** em situações de temperatura crítica (`>= 35 °C`) ou movimentação das persianas.
+O Nó Estufa avalia continuamente os sensores a cada ciclo curto (~600 ms para LDR e 2 s para DHT11) e atua autonomamente:
+
+* **Controle do Servomotor da Persiana (GPIO 6) em Resposta à Luz (LDR):**
+  * **Escuro / Tampando o LDR (`Luz < 25%`):** Persiana fecha em **`0°` (Fechada)** para isolamento térmico e **LIGA o OUT2 (LED de Cultivo)** para suplementação luminosa.
+  * **Luz Ambiente Normal (`25% <= Luz <= 75%`):** Persiana abre em **`90°` (Aberta)** para máximo aproveitamento da luz solar e ventilação natural, **DESLIGANDO o OUT2**.
+  * **Sol Muito Forte / Lanterna no LDR (`Luz > 75%`):** Persiana inclina para **`160°` (Sombreamento)** para proteger as plantas contra insolação excessiva e queima de folhas.
+* **Controle das Saídas da Ponte H L298N (ZX-040):**
+  * **OUT1 — Ventoinha 5V (Exaustor / Refrigeração):** Liga quando `Temperatura > 28 °C` ou `Umidade > 80%`.
+  * **OUT2 — LED de Cultivo (Iluminação Suplementar):** Liga automaticamente quando `Luz < 25%`.
+  * **OUT3 — Irrigação / Nebulização (LED Simulador Azul):** Liga quando `Umidade < 45%`.
+  * **OUT4 — Aquecedor Térmico (LED Simulador Vermelho):** Liga quando `Temperatura < 18 °C`.
+* **Alarme Audiovisual Local (Buzzer + LEDs):**
+  * **LED Verde (GPIO 41):** Aceso contínuo durante operação normal.
+  * **LED Vermelho (GPIO 40) + Buzzer (GPIO 42):** Acionados em caso de emergência climática (`Temperatura >= 35 °C`), forçando a Ventoinha (OUT1) a ligar e transmitindo status de alerta via LoRa/MQTT.
+  * O Buzzer também emite bipes curtos de aviso ao movimentar a persiana.
 
 ### 2. Modo Manual (Override Remoto pelo Site / Node-RED)
-Através do painel web, o operador pode assumir o controle manual a qualquer momento:
-* Ajuste fino do ângulo de abertura das persianas ($0^\circ$ a $180^\circ$) por *slider* ou botões de atalho (*Fechada*, *Meia-Luz*, *Aberta*).
-* Acionamento individual em tempo real de cada um dos 4 canais do relé.
-* Silenciamento remoto (*Mute*) ou teste de sirene do Buzzer.
-* Atualização remota dos *setpoints* de temperatura, umidade e luminosidade do modo automático.
+Através do painel web ou do Node-RED, o operador pode assumir o controle a qualquer momento:
+* Ajuste do ângulo da persiana ($0^\circ$ a $180^\circ$) por *slider* ou atalhos rápidos (*Fechar 0°*, *Meia-Luz 45°*, *Abrir 90°*, *Sombra 160°*).
+* Acionamento manual e individual das 4 saídas do L298N (Ventoinha, LED Cultivo, Irrigação, Aquecedor).
+* Silenciamento temporário (*Mute*) ou teste manual do Buzzer.
+* Reprogramação remota dos limiares de acionamento do modo automático.
 
 ---
 
-## Hardware e Pinagem (Nó Estufa — PCI)
+## Hardware e Pinagem (Nó Estufa — Heltec V3)
 
-A Placa de Circuito Impresso (PCI) do Nó Estufa respeita os pinos dedicados ao transceptor SPI LoRa SX1276 (`GPIO 5, 14, 18, 19, 23, 26`) e inclui desacoplamento capacitivo ($100\,\mu\text{F}$) no barramento de $5\text{V}$ dos servomotores.
+O circuito do Nó Estufa foi dimensionado para a placa **Heltec WiFi LoRa 32 V3 (ESP32-S3)** com transceptor **Semtech SX1262 (915 MHz)** e **Display OLED SSD1306 integrado**.
 
-| Periférico / Sensor | Pino (ESP32 LoRa) | Tipo de Interface | Função no Sistema |
+| Periférico / Sensor | Pino na Heltec V3 | Tipo de Interface | Função no Sistema |
 | :--- | :---: | :---: | :--- |
-| **Transceptor LoRa SX1276** | `5, 18, 19, 23, 14, 26` | SPI Interno | Comunicação RF bidirecional em 915 MHz |
-| **Sensor LDR** | `GPIO 36 (VP)` | Entrada Analógica (ADC1) | Medição do nível de luminosidade (%) |
-| **Sensor DHT11** | `GPIO 13` | Digital One-Wire | Medição de temperatura (°C) e umidade (%) |
-| **Servomotor 1 (Persiana Principal)** | `GPIO 12` | Saída PWM (50 Hz) | Controle angular da persiana ($0^\circ - 180^\circ$) |
-| **Servomotor 2 (Escotilha Auxiliar)** | `GPIO 25` | Saída PWM (50 Hz) | Controle de ventilação superior |
-| **Relé 1 — Exaustor** | `GPIO 17` | Saída Digital | Ventilação forçada para redução térmica |
-| **Relé 2 — Iluminação Grow LED** | `GPIO 2` | Saída Digital | Suplementação luminosa |
-| **Relé 3 — Irrigação / Nebulizador** | `GPIO 27` | Saída Digital | Controle de umidade baixa |
-| **Relé 4 — Aquecedor** | `GPIO 32` | Saída Digital | Aquecimento em noites frias |
-| **Buzzer de Alerta** | `GPIO 33` | Saída Digital / PWM | Alarme sonoro local de emergência |
-| **LEDs de Status (Verde / Vermelho)** | `GPIO 21 / GPIO 22` | Saída Digital | Indicação visual de operação e falha |
+| **LoRa Semtech SX1262** | `NSS=8, SCK=9, MOSI=10, MISO=11, RST=12, BUSY=13, DIO1=14` | SPI Dedicado | Comunicação rádio LoRa 915 MHz |
+| **Display OLED SSD1306 (128x64)** | `SDA=17, SCL=18, RST=21, Vext=36` | I2C Interno | Exibição local de IP, sensores, persiana, saídas e LoRa |
+| **LED Onboard Branco** | `GPIO 35` | Saída Digital | Indicação de envio/recepção de pacotes LoRa |
+| **Botão PRG / BOOT** | `GPIO 0` | Entrada com Pull-up | Alterna manualmente entre modo AUTO e MANUAL na bancada |
+| **Sensor LDR (Luminosidade)** | `GPIO 4` | Entrada Analógica (ADC1) | Divisor de tensão com resistor de $10\text{ k}\Omega$ para medição de luz (%) |
+| **Sensor DHT11 (Temp. e Umidade)** | `GPIO 5` | Digital One-Wire | Medição de temperatura (°C) e umidade relativa (%) |
+| **Servomotor da Persiana** | `GPIO 6` | Saída PWM (50 Hz) | Controle do ângulo das aletas da persiana ($0^\circ$ a $180^\circ$) |
+| **Ponte H L298N — IN1 (OUT1)** | `GPIO 47` | Saída Digital (HIGH=ON) | Aciona a **Ventoinha 5V** (Exaustor) |
+| **Ponte H L298N — IN2 (OUT2)** | `GPIO 48` | Saída Digital (HIGH=ON) | Aciona o **LED de Cultivo** (Iluminação) |
+| **Ponte H L298N — IN3 (OUT3)** | `GPIO 45` | Saída Digital (HIGH=ON) | Aciona o **LED Simulador de Irrigação** (Azul) |
+| **Ponte H L298N — IN4 (OUT4)** | `GPIO 46` | Saída Digital (HIGH=ON) | Aciona o **LED Simulador de Aquecedor** (Vermelho) |
+| **Buzzer de Alerta** | `GPIO 42` | Saída Digital | Alarme sonoro local de emergência e movimentação |
+| **LED Status Verde** | `GPIO 41` | Saída Digital | Indicação visual de operação normal |
+| **LED Status Vermelho** | `GPIO 40` | Saída Digital | Indicação visual de alarme crítico |
+
+> **Nota de Alimentação do L298N (ZX-040):** O módulo Ponte H L298N deve receber `+5V` tanto no borne `12V` (potência das saídas) quanto no borne `+5V` (lógica interna), com o parafuso central `GND` conectado ao terra comum da protoboard/ESP32. Os jumpers `ENA` e `ENB` devem permanecer inseridos.
 
 ---
 
 ## Protocolo de Mensagens (LoRa & MQTT)
 
 ### Pacotes LoRa (915 MHz)
-* **Telemetria (Estufa $\rightarrow$ Gateway):**
+* **Telemetria (Estufa $\rightarrow$ Gateway a cada 5s):**
   ```json
   {"id":"EST01","seq":142,"t":26.4,"h":62.0,"l":78,"srv":90,"r":[0,0,0,0],"al":0,"m":"AUTO"}
   ```
-* **Comando de Atuação (Gateway $\rightarrow$ Estufa):**
+  *(Onde: `t` = Temp °C, `h` = Umidade %, `l` = Luz %, `srv` = Ângulo do servo, `r` = Saídas OUT1..OUT4 do L298N, `al` = Alarme, `m` = Modo).*
+* **Comando de Atuação (Gateway $\rightarrow$ Estufa sob demanda):**
   ```json
   {"target":"EST01","cmd":"SET","m":"MAN","srv":45,"r":[1,0,0,0],"buz":0}
+  ```
+* **Configuração de Limiares (Gateway $\rightarrow$ Estufa):**
+  ```json
+  {"target":"EST01","cmd":"CFG","tMax":28.0,"tMin":18.0,"hMin":45.0,"lMin":25}
   ```
 
 ### Tópicos MQTT
 | Tópico | Direção | Descrição |
 | :--- | :---: | :--- |
-| `unifesp/iot/estufa/telemetria` | `Gateway -> Nuvem` | JSON com leituras dos sensores, estado dos atuadores e `RSSI`/`SNR` LoRa |
-| `unifesp/iot/estufa/comando/modo` | `Nuvem -> Gateway` | Altera modo de operação (`"AUTO"` ou `"MAN"`) |
+| `unifesp/iot/estufa/telemetria` | `Gateway -> Nuvem` | Payload JSON completo da estufa acrescido de `RSSI` e `SNR` do link LoRa |
+| `unifesp/iot/estufa/comando/modo` | `Nuvem -> Gateway` | Define o modo de operação (`"AUTO"` ou `"MAN"`) |
 | `unifesp/iot/estufa/comando/persiana` | `Nuvem -> Gateway` | Define o ângulo da persiana (`0` a `180`) |
-| `unifesp/iot/estufa/comando/reles` | `Nuvem -> Gateway` | Aciona canal específico do módulo relé (`{"ch":1,"state":1}`) |
-| `unifesp/iot/estufa/comando/config` | `Nuvem -> Gateway` | Atualiza limiares de temperatura, umidade e luz |
+| `unifesp/iot/estufa/comando/reles` | `Nuvem -> Gateway` | Aciona saída individual da Ponte H L298N (`{"ch":0,"state":1}`) |
+| `unifesp/iot/estufa/comando/config` | `Nuvem -> Gateway` | Reconfigura setpoints de automação remotamente |
 
 ---
 
@@ -164,9 +177,11 @@ projeto-IOT/
 │   └── pre-push
 ├── firmware/
 │   ├── no_estufa_lora/
-│   │   └── no_estufa_lora.ino          # Firmware do ESP32 LoRa #1 (Estufa)
-│   └── no_gateway_lora_mqtt/
-│       └── no_gateway_lora_mqtt.ino    # Firmware do ESP32 LoRa #2 (Gateway + OTA)
+│   │   └── no_estufa_lora.ino          # Firmware do Nó Estufa (Heltec V3 + L298N + Sensores)
+│   ├── no_gateway_lora_mqtt/
+│   │   └── no_gateway_lora_mqtt.ino    # Firmware do Nó Gateway (Heltec V3 + Wi-Fi/MQTT + OTA)
+│   └── teste_hardware_lora_wifi_oled/
+│       └── teste_hardware_lora_wifi_oled.ino # Diagnóstico completo de bancada (SX1262 + OLED + AP)
 ├── web/                                # Site de Gerenciamento Remoto (GitHub Pages)
 │   ├── index.html
 │   ├── css/
@@ -208,7 +223,7 @@ Este repositório conta com automação de governança (`.githooks/` e **GitHub 
 3. **Faça seus commits e envie sua branch para o GitHub:**
    ```bash
    git add .
-   git commit -m "feat: implementa leitura do sensor DHT11 e controle do servo"
+   git commit -m "feat: implementa controle do servo via LDR"
    git push -u origin feature/minha-funcionalidade
    ```
 4. **Abra um Pull Request para a branch `develop`:**
@@ -219,13 +234,24 @@ Este repositório conta com automação de governança (`.githooks/` e **GitHub 
 
 ## Como Executar o Projeto
 
-1. **Firmware dos ESP32 LoRa (`firmware/`):**
-   * Instale na Arduino IDE / PlatformIO as bibliotecas `LoRa` (por Sandeep Mistry), `DHT sensor library`, `ESP32Servo`, `PubSubClient` e `ArduinoJson`.
-   * Grave `no_estufa_lora.ino` no ESP32 #1 (Estufa) e `no_gateway_lora_mqtt.ino` no ESP32 #2 (Gateway).
-2. **Banco de Dados e Node-RED (`nuvem_nodered/`):**
+1. **Bibliotecas Necessárias (Arduino IDE):**
+   * No Gerenciador de Bibliotecas da Arduino IDE, instale:
+     * **`RadioLib`** (por Jan Gromes) — suporte ao chip LoRa Semtech SX1262
+     * **`Adafruit SSD1306`** e **`Adafruit GFX Library`** — display OLED integrado
+     * **`DHT sensor library`** (por Adafruit) e **`Adafruit Unified Sensor`**
+     * **`ESP32Servo`** (por Kevin Harrington / John K. Bennett)
+     * **`ArduinoJson`** (por Benoit Blanchon)
+     * **`PubSubClient`** (por Nick O'Leary)
+2. **Gravação do Firmware:**
+   * Em **Ferramentas $\rightarrow$ Placa**, selecione **`Heltec WiFi LoRa 32(V3)`** (ou `ESP32S3 Dev Module`).
+   * Grave `no_estufa_lora.ino` no ESP32-S3 da Estufa e `no_gateway_lora_mqtt.ino` no ESP32-S3 Gateway.
+3. **Painel Web de Validação Local na Bancada:**
+   * O Nó Estufa inicia um ponto de acesso Wi-Fi próprio: **`Estufa_LoRa_V3`** (senha: **`12345678`**).
+   * Conectando pelo celular ou notebook e acessando **`http://192.168.4.1`**, é possível acionar manualmente o servomotor, as 4 saídas do L298N e visualizar os sensores em tempo real.
+4. **Banco de Dados e Node-RED (`nuvem_nodered/`):**
    * Execute o script `schema_banco.sql` na instância PostgreSQL/Supabase (ou SQLite).
    * No Node-RED, importe o arquivo `flows_estufa.json`, configure as credenciais do Broker MQTT e do banco de dados e clique em **Deploy**.
-3. **Site de Gerenciamento Remoto (`web/`):**
+5. **Site de Gerenciamento Remoto (`web/`):**
    * Acesse diretamente pela URL do **GitHub Pages** deste repositório ou abra `web/index.html` no navegador.
 
 ---
@@ -235,6 +261,6 @@ Este repositório conta com automação de governança (`.githooks/` e **GitHub 
 | Frente / Etapa do Projeto | Descrição das Entregas sob Responsabilidade | Nome do(a) Integrante | RA | GitHub |
 | :--- | :--- | :---: | :---: | :---: |
 | **1. Hardware, Circuito e PCI** | Validação em protoboard, esquemático elétrico, confecção da Placa de Circuito Impresso (PCI) e modelagem do encapsulamento 3D | *[Inserir Nome]* | *[Inserir RA]* | `@usuario` |
-| **2. Firmware Nó Estufa & LoRa** | Código do ESP32 LoRa #1 (`no_estufa_lora.ino`), leitura de sensores (DHT11/LDR), controle de Servos/Relés/Buzzer e protocolo LoRa 915 MHz | *[Inserir Nome]* | *[Inserir RA]* | `@usuario` |
+| **2. Firmware Nó Estufa & LoRa** | Código do ESP32 LoRa #1 (`no_estufa_lora.ino`), leitura de sensores (DHT11/LDR), controle do Servo/L298N/Buzzer e protocolo LoRa 915 MHz | *[Inserir Nome]* | *[Inserir RA]* | `@usuario` |
 | **3. Firmware Nó Gateway & OTA** | Código do ESP32 LoRa #2 (`no_gateway_lora_mqtt.ino`), ponte LoRa $\leftrightarrow$ Wi-Fi/MQTT, leitura de RSSI/SNR e atualização remota (OTA) | *[Inserir Nome]* | *[Inserir RA]* | `@usuario` |
 | **4. Nuvem (Node-RED), Banco & Web** | Fluxos do Node-RED (`flows_estufa.json`), banco de dados histórico (`schema_banco.sql`) e site de controle remoto (`web/`) | *[Inserir Nome]* | *[Inserir RA]* | `@usuario` |
