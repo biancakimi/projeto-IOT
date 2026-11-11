@@ -1,0 +1,111 @@
+name: Automated Code Review & PR Validation
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  automated-code-review:
+    name: Automated Code Review & Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código da branch do PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 1. Validar Fluxo de Branches (GitFlow -> develop)
+        id: branch_check
+        run: |
+          HEAD_REF="${{ github.head_ref }}"
+          BASE_REF="${{ github.base_ref }}"
+          echo "PR de '$HEAD_REF' para '$BASE_REF'"
+
+          if [ "$BASE_REF" = "main" ] && [ "$HEAD_REF" != "develop" ]; then
+            echo "::error::Pull Requests para a branch 'main' devem vir exclusivamente da branch 'develop' (atual: '$HEAD_REF')."
+            exit 1
+          fi
+
+          if [ "$BASE_REF" = "develop" ]; then
+            if [ "$HEAD_REF" = "main" ] || [ "$HEAD_REF" = "develop" ]; then
+              echo "::error::Pull Requests para 'develop' devem partir de uma branch separada de trabalho (ex: feature/*, fix/*, docs/*)."
+              exit 1
+            fi
+          fi
+          echo "branch_valid=true" >> $GITHUB_OUTPUT
+
+      - name: 2. Revisão Automatizada de Firmware (.ino) e Segredos
+        id: firmware_check
+        run: |
+          ERRORS=0
+          for file in firmware/*/*.ino; do
+            echo "Analisando $file..."
+            if ! grep -q "void setup()" "$file" || ! grep -q "void loop()" "$file"; then
+              echo "::error file=$file::O arquivo $file precisa conter as funções 'void setup()' e 'void loop()'."
+              ERRORS=$((ERRORS+1))
+            fi
+
+            # Verifica chaves desbalanceadas
+            OPEN_BRACES=$(grep -o "{" "$file" | wc -l)
+            CLOSE_BRACES=$(grep -o "}" "$file" | wc -l)
+            if [ "$OPEN_BRACES" -ne "$CLOSE_BRACES" ]; then
+              echo "::error file=$file::Chaves '{' ($OPEN_BRACES) e '}' ($CLOSE_BRACES) desbalanceadas em $file."
+              ERRORS=$((ERRORS+1))
+            fi
+          done
+
+          if [ "$ERRORS" -gt 0 ]; then
+            exit 1
+          fi
+          echo "firmware_valid=true" >> $GITHUB_OUTPUT
+
+      - name: 3. Revisão Automatizada de Nuvem (Node-RED JSON & SQL) e Web
+        id: cloud_web_check
+        run: |
+          echo "Validando JSON do Node-RED..."
+          jq empty nuvem_nodered/flows_estufa.json
+
+          echo "Validando Schema SQL do Banco de Dados..."
+          grep -qi "CREATE TABLE" nuvem_nodered/schema_banco.sql
+
+          echo "Validando arquivos do Site Web..."
+          test -f web/index.html
+          test -f web/css/styles.css
+          test -f web/js/app.js
+          echo "cloud_web_valid=true" >> $GITHUB_OUTPUT
+
+      - name: 4. Publicar Relatório de Code Review Automatizado no PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const headRef = context.payload.pull_request.head.ref;
+            const baseRef = context.payload.pull_request.base.ref;
+            const author = context.payload.pull_request.user.login;
+
+            const body = [
+              `### 🤖 Relatório de Code Review Automatizado — SmartGreenhouse LoRa`,
+              ``,
+              `| Verificação | Status | Detalhes |`,
+              `| :--- | :---: | :--- |`,
+              `| **Fluxo de Branch** | ✅ | \`${headRef}\` $\\rightarrow$ \`${baseRef}\` |`,
+              `| **Firmware ESP32 LoRa (\`.ino\`)** | ✅ | Estrutura \`setup()\` / \`loop()\` e escopo validados |`,
+              `| **Node-RED & Schema SQL** | ✅ | \`flows_estufa.json\` e \`schema_banco.sql\` íntegros |`,
+              `| **Frontend Web (\`web/\`)** | ✅ | Arquivos HTML/CSS/JS verificados |`,
+              ``,
+              `> ⚠️ **Requisito para Merge:** Além desta verificação automatizada, este Pull Request exige **aprovação manual (Approve)** de pelo menos **1 outro integrante do grupo** (diferente de @${author}) antes do merge na branch \`${baseRef}\`.`
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });

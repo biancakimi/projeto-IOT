@@ -1,0 +1,19 @@
+#!/bin/sh
+# ======================================================================================
+# GIT HOOK LOCAL (pre-push): Bloqueia push direto para 'main' e 'develop'
+# ======================================================================================
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "develop" ]; then
+  echo "================================================================================"
+  echo "❌ PUSH DIRETO BLOQUEADO PARA A BRANCH '$BRANCH'!"
+  echo "--------------------------------------------------------------------------------"
+  echo "Use uma branch separada (ex: feature/minha-alteracao) e abra um Pull Request"
+  echo "para a branch 'develop' no GitHub para passar pelo Code Review automatizado"
+  echo "e pela aprovação de outro membro do grupo."
+  echo "================================================================================"
+  exit 1
+fi
+
+exit 0
