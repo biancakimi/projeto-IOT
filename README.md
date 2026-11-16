@@ -124,10 +124,10 @@ O circuito do Nó Estufa foi dimensionado para a placa **Heltec WiFi LoRa 32 V3 
 | **Sensor LDR (Luminosidade)** | `GPIO 4` | Entrada Analógica (ADC1) | Divisor de tensão com resistor de $10\text{ k}\Omega$ para medição de luz (%) |
 | **Sensor DHT11 (Temp. e Umidade)** | `GPIO 5` | Digital One-Wire | Medição de temperatura (°C) e umidade relativa (%) |
 | **Servomotor da Persiana** | `GPIO 6` | Saída PWM (50 Hz) | Controle do ângulo das aletas da persiana ($0^\circ$ a $180^\circ$) |
-| **Módulo Relé 1 (`D1 / IN1`) — Ventoinha 5V** | `GPIO 47` *(espelho: `GPIO 7`)* | Saída Digital (HIGH=ON) | Aciona a **Ventoinha 5V** (Exaustor no contato `NA` do canal `D1`) |
-| **Módulo Relé 1 (`D2 / IN2`) — Iluminação** | `GPIO 48` *(espelho: `GPIO 38`)* | Saída Digital (HIGH=ON) | Aciona a **Iluminação Artificial** (Cultivo no canal `D2`) |
-| **Módulo Relé 2 (`D1 / IN1`) — Irrigação** | `GPIO 33` ou `GPIO 45` *(espelho: `39`)* | Saída Digital (HIGH=ON) | Aciona a **Bomba de Irrigação / Válvula** (canal `D1` do 2º módulo) |
-| **Módulo Relé 2 (`D2 / IN2`) — Aquecedor** | `GPIO 34`, `GPIO 26` ou `GPIO 46` | Saída Digital (HIGH=ON) | Aciona o **Aquecedor Térmico** (canal `D2` do 2º módulo) |
+| **Módulo Relé 1 (`D1 / IN1`) — Ventoinha 5V** | `GPIO 47` | Saída Digital (HIGH=ON) | Aciona a **Ventoinha 5V** (Exaustor no contato `NA` do canal `D1`) |
+| **Módulo Relé 1 (`D2 / IN2`) — Iluminação** | `GPIO 48` | Saída Digital (HIGH=ON) | Aciona a **Iluminação Artificial** (Cultivo no canal `D2`) |
+| **Módulo Relé 2 (`D1 / IN1`) — Irrigação** | `GPIO 33` | Saída Digital (HIGH=ON) | Aciona a **Bomba de Irrigação / Válvula** (canal `D1` do 2º módulo) |
+| **Módulo Relé 2 (`D2 / IN2`) — Aquecedor** | `GPIO 34` | Saída Digital (HIGH=ON) | Aciona o **Aquecedor Térmico** (canal `D2` do 2º módulo) |
 | **Buzzer de Alerta** | `GPIO 42` | Saída Digital | Alarme sonoro local de emergência e movimentação |
 | **LED Status Verde** | `GPIO 41` | Saída Digital | Indicação visual de operação normal |
 | **LED Status Vermelho** | `GPIO 40` | Saída Digital | Indicação visual de alarme crítico |

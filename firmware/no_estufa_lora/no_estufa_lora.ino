@@ -2,15 +2,15 @@
  * ======================================================================================
  * PROJETO FINAL IoT (UNIFESP) — NÓ ESTUFA REMOTA (Heltec WiFi LoRa 32 V3)
  * ======================================================================================
- * Hardware configurado para 4 Módulos Relé (Lado do Pino 47 - Header J2):
+ * Hardware configurado para 2x Módulos Relé de 2 Canais (Lado do Pino 47 - Header J2):
  *   - Pino 4  (GPIO 4):  Sensor LDR (ADC1 12 bits)
  *   - Pino 5  (GPIO 5):  Sensor DHT11 (Temperatura e Umidade)
  *   - Pino 6  (GPIO 6):  Servomotor da Persiana (PWM 50 Hz)
- *   - 4x Relés (Ativos em HIGH por padrão — todos do lado do Pino 47):
- *       * Relé 1 (Ventoinha 5V):      Pino 47 (também espelhado no Pino 7)
- *       * Relé 2 (Iluminação Cultivo): Pino 48 (também espelhado no Pino 38)
- *       * Relé 3 (Bomba Irrigação):   Pino 33 ou Pino 45 (também espelhado no Pino 39)
- *       * Relé 4 (Aquecedor):         Pino 34 ou Pino 26 ou Pino 46
+ *   - 2x Módulos Relé Duplos (Ativos em HIGH por padrão — pinos 47, 48, 33 e 34):
+ *       * Módulo 1 D1 (Ventoinha 5V):      Pino 47 (GPIO 47)
+ *       * Módulo 1 D2 (Iluminação Cultivo): Pino 48 (GPIO 48)
+ *       * Módulo 2 D1 (Bomba Irrigação):   Pino 33 (GPIO 33)
+ *       * Módulo 2 D2 (Aquecedor):         Pino 34 (GPIO 34)
  *   - Sinalização Local: Pino 41 (LED Verde Status), Pino 42 (Buzzer Alerta), Pino 40 (LED Vermelho Alarme)
  * ======================================================================================
  */
@@ -51,24 +51,11 @@
 #define DHT_TYPE        DHT11
 #define PIN_SERVO       6    // Pino '6' -> Servomotor da Persiana
 
-// --- Pinos dos 4 Relés (Sequência física na fileira do Pino 47: 34, 33, 47, 48, 26 + 45/46) ---
-// Relé 1: Ventoinha / Exaustor 5V
-#define PIN_RELE1_MAIN  47   // Pino '47' (Principal no lado J2)
-#define PIN_RELE1_ALT   7    // Pino '7'  (Espelho)
-
-// Relé 2: Iluminação Artificial (Grow Light / Cultivo)
-#define PIN_RELE2_MAIN  48   // Pino '48' (Logo abaixo do 47 no lado J2)
-#define PIN_RELE2_ALT   38   // Pino '38' (Espelho)
-
-// Relé 3: Bomba de Irrigação
-#define PIN_RELE3_MAIN  33   // Pino '33' (Logo acima do 47 no lado J2)
-#define PIN_RELE3_ALT1  45   // Pino '45' (Espelho)
-#define PIN_RELE3_ALT2  39   // Pino '39' (Espelho)
-
-// Relé 4: Aquecedor
-#define PIN_RELE4_MAIN  34   // Pino '34' (Logo acima do 33 no lado J2)
-#define PIN_RELE4_ALT1  26   // Pino '26' (Logo abaixo do 48 no lado J2)
-#define PIN_RELE4_ALT2  46   // Pino '46' (Espelho)
+// --- Pinos dos 2 Módulos Relé de 2 Canais (Fileira do Pino 47: 47, 48, 33, 34) ---
+#define PIN_RELE1       47   // Módulo 1 D1 -> Ventoinha / Exaustor 5V (Pino '47')
+#define PIN_RELE2       48   // Módulo 1 D2 -> Iluminação Artificial / Cultivo (Pino '48')
+#define PIN_RELE3       33   // Módulo 2 D1 -> Bomba de Irrigação (Pino '33')
+#define PIN_RELE4       34   // Módulo 2 D2 -> Aquecedor (Pino '34')
 
 // Sinalização Local de Alarme
 #define PIN_LED_VERM    40   // Pino '40' -> LED Vermelho Alarme Crítico
@@ -141,23 +128,10 @@ void atualizarSaidasFisicas() {
   int onLevel  = RELE_ATIVO_LOW ? LOW  : HIGH;
   int offLevel = RELE_ATIVO_LOW ? HIGH : LOW;
 
-  // Relé 1: Ventoinha / Exaustor (Pino 47 + espelho no Pino 7)
-  digitalWrite(PIN_RELE1_MAIN, saidaEstado[0] ? onLevel : offLevel);
-  digitalWrite(PIN_RELE1_ALT,  saidaEstado[0] ? onLevel : offLevel);
-
-  // Relé 2: Iluminação Artificial / Cultivo (Pino 48 + espelho no Pino 38)
-  digitalWrite(PIN_RELE2_MAIN, saidaEstado[1] ? onLevel : offLevel);
-  digitalWrite(PIN_RELE2_ALT,  saidaEstado[1] ? onLevel : offLevel);
-
-  // Relé 3: Bomba de Irrigação (Pino 33 ou Pino 45 + espelho no Pino 39)
-  digitalWrite(PIN_RELE3_MAIN, saidaEstado[2] ? onLevel : offLevel);
-  digitalWrite(PIN_RELE3_ALT1, saidaEstado[2] ? onLevel : offLevel);
-  digitalWrite(PIN_RELE3_ALT2, saidaEstado[2] ? onLevel : offLevel);
-
-  // Relé 4: Aquecedor (Pino 34 ou Pino 26 ou Pino 46)
-  digitalWrite(PIN_RELE4_MAIN, saidaEstado[3] ? onLevel : offLevel);
-  digitalWrite(PIN_RELE4_ALT1, saidaEstado[3] ? onLevel : offLevel);
-  digitalWrite(PIN_RELE4_ALT2, saidaEstado[3] ? onLevel : offLevel);
+  digitalWrite(PIN_RELE1, saidaEstado[0] ? onLevel : offLevel); // Pino 47: Mód.1 D1 (Ventoinha)
+  digitalWrite(PIN_RELE2, saidaEstado[1] ? onLevel : offLevel); // Pino 48: Mód.1 D2 (Iluminação)
+  digitalWrite(PIN_RELE3, saidaEstado[2] ? onLevel : offLevel); // Pino 33: Mód.2 D1 (Irrigação)
+  digitalWrite(PIN_RELE4, saidaEstado[3] ? onLevel : offLevel); // Pino 34: Mód.2 D2 (Aquecedor)
 
   // O LED Branco da própria placa Heltec (GPIO 35) acende se qualquer relé estiver ativo
   digitalWrite(LED_ONBOARD, (saidaEstado[0] || saidaEstado[1] || saidaEstado[2] || saidaEstado[3]) ? HIGH : LOW);
@@ -381,12 +355,12 @@ void configurarRotasWeb() {
     html += "<form action='/servo?ang=160' method='POST'><button class='btn' type='submit'>Sombra (160°)</button></form>";
     html += "</div></div>";
 
-    html += "<div class='card'><h3>Controle dos 2 Módulos Relé Duplos (Lado do Pino 47)</h3><div class='grid'>";
+    html += "<div class='card'><h3>Controle dos 2 Módulos Relé Duplos (Pinos 47, 48, 33, 34)</h3><div class='grid'>";
     const char* nomesSaida[4] = {
       "Mód.1 D1 Ventoinha (P47)",
       "Mód.1 D2 Iluminação (P48)",
-      "Mód.2 D1 Irrigação (P33/P45)",
-      "Mód.2 D2 Aquecedor (P34/P46)"
+      "Mód.2 D1 Irrigação (P33)",
+      "Mód.2 D2 Aquecedor (P34)"
     };
     for (int i = 0; i < 4; i++) {
       html += "<form action='/rele?ch=" + String(i) + "' method='POST'>";
@@ -442,16 +416,10 @@ void setup() {
 
   pinMode(LED_ONBOARD, OUTPUT);
   pinMode(BTN_PRG, INPUT_PULLUP);
-  pinMode(PIN_RELE1_MAIN, OUTPUT);
-  pinMode(PIN_RELE1_ALT, OUTPUT);
-  pinMode(PIN_RELE2_MAIN, OUTPUT);
-  pinMode(PIN_RELE2_ALT, OUTPUT);
-  pinMode(PIN_RELE3_MAIN, OUTPUT);
-  pinMode(PIN_RELE3_ALT1, OUTPUT);
-  pinMode(PIN_RELE3_ALT2, OUTPUT);
-  pinMode(PIN_RELE4_MAIN, OUTPUT);
-  pinMode(PIN_RELE4_ALT1, OUTPUT);
-  pinMode(PIN_RELE4_ALT2, OUTPUT);
+  pinMode(PIN_RELE1, OUTPUT);
+  pinMode(PIN_RELE2, OUTPUT);
+  pinMode(PIN_RELE3, OUTPUT);
+  pinMode(PIN_RELE4, OUTPUT);
   pinMode(PIN_LED_VERM, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
   pinMode(PIN_LED_VERDE, OUTPUT);

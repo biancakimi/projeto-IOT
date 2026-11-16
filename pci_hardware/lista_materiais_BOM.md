@@ -8,7 +8,7 @@
 | 2 | 1 | Sensor de Temperatura e Umidade DHT11 | `S1` | Conectado ao `GPIO 5` |
 | 3 | 1 | Fotoresistor LDR 5mm | `LDR1` | Divisor de tensão no `GPIO 4 (ADC1)` |
 | 4 | 1 | Servomotor da Persiana MG996R (ou SG90) | `SRV1` | Controle mecânico da persiana (`GPIO 6`) |
-| 5 | 2 | Módulo Relé 2 Canais 5V (Total de 4 canais ativos em HIGH) | `REL1`, `REL2` | Módulo 1 (`D1=P47`, `D2=P48`) e Módulo 2 (`D1=P33/P45`, `D2=P34/P46`) |
+| 5 | 2 | Módulo Relé 2 Canais 5V (Total de 4 canais ativos em HIGH) | `REL1`, `REL2` | Módulo 1 (`D1=GPIO 47`, `D2=GPIO 48`) e Módulo 2 (`D1=GPIO 33`, `D2=GPIO 34`) |
 | 6 | 1 | Ventoinha 5V (Cooler / Exaustor) | `FAN1` | Conectada ao contato `NA` do canal `D1` do Módulo Relé 1 (`GPIO 47`) |
 | 7 | 3 | LEDs Difusos 5mm (Branco, Azul, Vermelho) | `LED1`–`LED3` | Cargas dos demais canais de relé (Cultivo, Irrigação, Aquecimento) |
 | 8 | 1 | Capacitor Eletrolítico 100 µF / 16V (ou 470 µF) | `C1` | Desacoplamento da alimentação do Servomotor |
