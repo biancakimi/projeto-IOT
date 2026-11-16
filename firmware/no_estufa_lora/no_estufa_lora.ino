@@ -381,12 +381,12 @@ void configurarRotasWeb() {
     html += "<form action='/servo?ang=160' method='POST'><button class='btn' type='submit'>Sombra (160°)</button></form>";
     html += "</div></div>";
 
-    html += "<div class='card'><h3>Controle dos 4 Relés (Lado do Pino 47)</h3><div class='grid'>";
+    html += "<div class='card'><h3>Controle dos 2 Módulos Relé Duplos (Lado do Pino 47)</h3><div class='grid'>";
     const char* nomesSaida[4] = {
-      "Relé 1 Ventoinha (P47)",
-      "Relé 2 Iluminação (P48)",
-      "Relé 3 Irrigação (P33/P45)",
-      "Relé 4 Aquecedor (P34/P46)"
+      "Mód.1 D1 Ventoinha (P47)",
+      "Mód.1 D2 Iluminação (P48)",
+      "Mód.2 D1 Irrigação (P33/P45)",
+      "Mód.2 D2 Aquecedor (P34/P46)"
     };
     for (int i = 0; i < 4; i++) {
       html += "<form action='/rele?ch=" + String(i) + "' method='POST'>";
