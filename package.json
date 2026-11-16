@@ -1,0 +1,13 @@
+{
+  "name": "smartgreenhouse-iot",
+  "version": "1.0.0",
+  "description": "Painel Web e API Serverless para SmartGreenhouse LoRa IoT com Neon PostgreSQL e Vercel",
+  "main": "api/historico.js",
+  "type": "module",
+  "scripts": {
+    "start": "serve web"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.2"
+  }
+}
