@@ -1,3 +1,21 @@
 {
-  "version": 2
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/web/index.html"
+    },
+    {
+      "source": "/index.html",
+      "destination": "/web/index.html"
+    },
+    {
+      "source": "/css/(.*)",
+      "destination": "/web/css/$1"
+    },
+    {
+      "source": "/js/(.*)",
+      "destination": "/web/js/$1"
+    }
+  ]
 }
