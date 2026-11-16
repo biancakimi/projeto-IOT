@@ -188,7 +188,19 @@ void inicializarLoRaSX1262() {
   loraSpi.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_NSS);
 
   // Inicializa SX1262: 915.0 MHz, BW=125 kHz, SF=7, CR=5, SyncWord=0x12, Power=14 dBm
+#if defined(RADIOLIB_UNIT_MEGA)
+  ConfigLoRa_t loraCfg;
+  loraCfg.frequency = RADIOLIB_UNIT_MEGA(915);
+  loraCfg.bandwidth = RADIOLIB_UNIT_KILO(125);
+  loraCfg.spreadingFactor = 7;
+  loraCfg.codingRate = 5;
+  loraCfg.syncWord = RADIOLIB_LORA_SYNC_WORD_PRIVATE;
+  loraCfg.power = 14;
+  loraCfg.preambleLength = 8;
+  int state = radio.begin(loraCfg);
+#else
   int state = radio.begin(LORA_FREQ_MHZ, 125.0, 7, 5, RADIOLIB_SX126X_SYNC_WORD_PRIVATE, 14, 8);
+#endif
 
   if (state == RADIOLIB_ERR_NONE) {
     loraOk = true;
