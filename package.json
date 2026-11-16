@@ -5,6 +5,7 @@
   "main": "api/historico.js",
   "type": "module",
   "scripts": {
+    "build": "mkdir -p public/web && cp -r web/* public/ && cp -r web/* public/web/",
     "start": "serve web"
   },
   "dependencies": {

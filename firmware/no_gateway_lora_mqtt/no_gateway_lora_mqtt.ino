@@ -51,8 +51,8 @@
 #define BTN_PRG         0    // Botão PRG onboard (dispara PING para o ESP 1)
 
 // ================= 2. CREDENCIAIS PADRÃO (TAMBÉM CONFIGURÁVEIS PELO SITE 192.168.4.1) =================
-const char* DEFAULT_WIFI_SSID   = "SEU_WIFI_AQUI";
-const char* DEFAULT_WIFI_PASS   = "SUA_SENHA_AQUI";
+const char* DEFAULT_WIFI_SSID   = "Yuji G75";
+const char* DEFAULT_WIFI_PASS   = "bncrsa6yp5wfm3r";
 
 // Broker MQTT Público compatível com TCP (1883 no ESP32) e WSS (8084 no Site Web HTTPS da Vercel)
 const char* DEFAULT_MQTT_HOST   = "broker.emqx.io";
@@ -468,12 +468,45 @@ void iniciarOTA() {
 }
 
 void conectarWiFi() {
+  WiFi.setSleep(false);
+  WiFi.setAutoReconnect(true);
+  WiFi.setTxPower(WIFI_POWER_15dBm);
+
+  int targetChannel = 1;
+  Serial.println("[Wi-Fi] Escaneando redes 2.4 GHz disponiveis...");
+  int n = WiFi.scanNetworks();
+  bool ssidEncontrado = false;
+  for (int i = 0; i < n; i++) {
+    Serial.printf("  -> SSID: '%s' (%d dBm, Canal %d)\n",
+                  WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.channel(i));
+    if (WiFi.SSID(i) == wifiSsid) {
+      ssidEncontrado = true;
+      targetChannel = WiFi.channel(i);
+    }
+  }
+  WiFi.scanDelete();
+
+  // Inicia o AP no mesmo canal da rede alvo para evitar queda de handshake ("sta bss deleted")
+  WiFi.softAP(GW_AP_SSID, GW_AP_PASS, targetChannel);
+  Serial.printf("[Wi-Fi AP] Portal do Gateway ativo em '%s' (Senha: %s, Canal %d) -> http://192.168.4.1\n",
+                GW_AP_SSID, GW_AP_PASS, targetChannel);
+
   if (wifiSsid.length() == 0 || wifiSsid == "SEU_WIFI_AQUI") {
-    Serial.println("[Wi-Fi] Configure o SSID em http://192.168.4.1 (Rede: Gateway_LoRa_V3 / Senha: 12345678)");
+    Serial.println("[Wi-Fi] Configure o SSID em http://192.168.4.1");
     return;
   }
+
+  if (!ssidEncontrado) {
+    Serial.printf("[Wi-Fi AVISO] A rede '%s' nao apareceu no scan 2.4 GHz! Verifique se o roteador/hotspot do celular esta ligado e em 2.4 GHz.\n",
+                  wifiSsid.c_str());
+  }
+
   Serial.printf("[Wi-Fi] Conectando a '%s'...\n", wifiSsid.c_str());
-  WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+  if (wifiPass.length() > 0) {
+    WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+  } else {
+    WiFi.begin(wifiSsid.c_str());
+  }
 }
 
 void configurarRotasWebGateway() {
@@ -653,12 +686,8 @@ void setup() {
     Serial.printf("[ERRO LoRa] Codigo RadioLib: %d\n", loraState);
   }
 
-  // Inicia Wi-Fi em modo AP + Station simultâneo
+  // Inicia Wi-Fi em modo AP + Station simultâneo (mesmo canal para evitar conflito de rádio)
   WiFi.mode(WIFI_AP_STA);
-  WiFi.softAP(GW_AP_SSID, GW_AP_PASS);
-  Serial.printf("[Wi-Fi AP] Portal do Gateway ativo em '%s' (Senha: %s) -> http://192.168.4.1\n",
-                GW_AP_SSID, GW_AP_PASS);
-
   conectarWiFi();
   configurarRotasWebGateway();
   atualizarDisplayOLED();
@@ -689,10 +718,20 @@ void loop() {
       lastVercelSync = millis();
       enviarParaVercelHTTPS();
     }
-  } else if (millis() - lastWifiCheck >= 10000) {
+  } else if (millis() - lastWifiCheck >= 30000) {
     lastWifiCheck = millis();
-    if (wifiSsid.length() > 0 && wifiSsid != "SEU_WIFI_AQUI") {
-      WiFi.reconnect();
+    wl_status_t st = WiFi.status();
+    if ((st == WL_NO_SSID_AVAIL || st == WL_CONNECT_FAILED || st == WL_DISCONNECTED) &&
+        wifiSsid.length() > 0 && wifiSsid != "SEU_WIFI_AQUI") {
+      Serial.printf("[Wi-Fi] Tentando conectar a '%s' (ou acesse http://192.168.4.1 no AP '%s')...\n",
+                    wifiSsid.c_str(), GW_AP_SSID);
+      WiFi.disconnect();
+      delay(50);
+      if (wifiPass.length() > 0) {
+        WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+      } else {
+        WiFi.begin(wifiSsid.c_str());
+      }
     }
   }
 
