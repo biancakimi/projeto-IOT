@@ -4,16 +4,160 @@
     "type": "tab",
     "label": "SmartGreenhouse LoRa — Fluxo Principal",
     "disabled": false,
-    "info": "Arquivo destinado à exportação do fluxo Node-RED da Etapa de Nuvem (MQTT -> Banco de Dados Histórico -> Dashboard /ui)."
+    "info": "Fluxo Node-RED integrando o ESP 2 Gateway (MQTT broker.emqx.io) com Dashboard e Banco de Dados Histórico."
   },
   {
-    "id": "comment_instrucoes",
-    "type": "comment",
+    "id": "broker_emqx_iot",
+    "type": "mqtt-broker",
+    "name": "Broker EMQX Cloud (UNIFESP IoT)",
+    "broker": "broker.emqx.io",
+    "port": "1883",
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true
+  },
+  {
+    "id": "mqtt_in_telemetria",
+    "type": "mqtt in",
     "z": "tab_estufa_iot",
-    "name": "TODO: Importar nós mqtt-in (telemetria), json, banco de dados (SQLite/PostgreSQL), gauges e mqtt-out (comandos)",
-    "info": "Substitua este arquivo pela exportação JSON do Node-RED após construir os fluxos.",
-    "x": 380,
-    "y": 100,
+    "name": "Telemetria ESP2 Gateway",
+    "topic": "unifesp/iot/estufa/telemetria",
+    "qos": "0",
+    "datatype": "json",
+    "broker": "broker_emqx_iot",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 170,
+    "y": 120,
+    "wires": [
+      [
+        "fn_processar_telemetria",
+        "dbg_telemetria"
+      ]
+    ]
+  },
+  {
+    "id": "fn_processar_telemetria",
+    "type": "function",
+    "z": "tab_estufa_iot",
+    "name": "Formatar p/ Banco SQL (/api/historico)",
+    "func": "const d = msg.payload;\nif (!d || typeof d.t === 'undefined') return null;\n\nconst r = Array.isArray(d.r) ? d.r : [0, 0, 0, 0];\nmsg.payload = {\n    temperatura: Number(d.t),\n    umidade: Number(d.h),\n    luminosidade: Number(d.l),\n    angulo_persiana: Number(d.srv || 90),\n    rele1_exaustor: Number(r[0]) === 1,\n    rele2_iluminacao: Number(r[1]) === 1,\n    rele3_irrigacao: Number(r[2]) === 1,\n    rele4_aquecedor: Number(r[3]) === 1,\n    alarme_ativo: Number(d.al) === 1,\n    modo_operacao: d.m || 'AUTO',\n    lora_rssi: d.rssi || -60,\n    lora_snr: d.snr || 9.5\n};\nreturn msg;",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 460,
+    "y": 120,
+    "wires": [
+      [
+        "dbg_sql_payload"
+      ]
+    ]
+  },
+  {
+    "id": "dbg_telemetria",
+    "type": "debug",
+    "z": "tab_estufa_iot",
+    "name": "JSON Recebido (LoRa -> MQTT)",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "payload.t",
+    "statusType": "auto",
+    "x": 450,
+    "y": 60,
     "wires": []
+  },
+  {
+    "id": "dbg_sql_payload",
+    "type": "debug",
+    "z": "tab_estufa_iot",
+    "name": "Registro Pronto p/ DB",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 760,
+    "y": 120,
+    "wires": []
+  },
+  {
+    "id": "mqtt_out_comando",
+    "type": "mqtt out",
+    "z": "tab_estufa_iot",
+    "name": "Enviar Ordem p/ ESP2 -> LoRa -> ESP1",
+    "topic": "unifesp/iot/estufa/comando",
+    "qos": "0",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "broker_emqx_iot",
+    "x": 520,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "inj_modo_auto",
+    "type": "inject",
+    "z": "tab_estufa_iot",
+    "name": "Ordem: Modo AUTO",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{\"cmd\":\"SET\",\"m\":\"AUTO\"}",
+    "payloadType": "json",
+    "x": 190,
+    "y": 220,
+    "wires": [
+      [
+        "mqtt_out_comando"
+      ]
+    ]
+  },
+  {
+    "id": "inj_persiana_90",
+    "type": "inject",
+    "z": "tab_estufa_iot",
+    "name": "Ordem: Abrir Persiana 90°",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{\"cmd\":\"SET\",\"m\":\"MAN\",\"srv\":90}",
+    "payloadType": "json",
+    "x": 200,
+    "y": 270,
+    "wires": [
+      [
+        "mqtt_out_comando"
+      ]
+    ]
   }
 ]

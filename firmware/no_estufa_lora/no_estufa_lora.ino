@@ -1,6 +1,6 @@
 /*
  * ======================================================================================
- * PROJETO FINAL IoT (UNIFESP) — NÓ ESTUFA REMOTA (Heltec WiFi LoRa 32 V3)
+ * PROJETO FINAL IoT (UNIFESP) — NÓ ESTUFA REMOTA (ESP 1: Heltec WiFi LoRa 32 V3)
  * ======================================================================================
  * Hardware configurado para 2x Módulos Relé de 2 Canais (Lado do Pino 47 - Header J2):
  *   - Pino 4  (GPIO 4):  Sensor LDR (ADC1 12 bits)
@@ -12,6 +12,10 @@
  *       * Módulo 2 D1 (Bomba Irrigação):   Pino 33 (GPIO 33)
  *       * Módulo 2 D2 (Aquecedor):         Pino 34 (GPIO 34)
  *   - Sinalização Local: Pino 41 (LED Verde Status), Pino 42 (Buzzer Alerta), Pino 40 (LED Vermelho Alarme)
+ *
+ * Comunicação LoRa 915 MHz com o ESP 2 (Nó Gateway):
+ *   - Envia telemetria JSON a cada 5s e imediatamente após receber comandos do ESP 2.
+ *   - Recebe ordens do site via ESP 2 (Modo AUTO/MAN, Persiana, 4 Relés, Buzzer e Limiares).
  * ======================================================================================
  */
 
@@ -82,7 +86,7 @@ bool RELE_ATIVO_LOW = false; // false = HIGH(3.3V) liga o relé | true = LOW(0V)
 bool modoAutomatico = true;
 bool servoProporcional = false;
 int anguloPersiana = 90;
-bool saidaEstado[4] = {false, false, false, false}; // [0:Relé Ventoinha, 1:LED Cultivo, 2:LED Irrig, 3:LED Aquec]
+bool saidaEstado[4] = {false, false, false, false}; // [0:Relé1 Ventoinha, 1:Relé2 Cultivo, 2:Relé3 Irrig, 3:Relé4 Aquec]
 bool alarmeAtivo = false;
 bool buzzerMute = false;
 
@@ -94,12 +98,18 @@ int cfgLuzBaixa = 25;
 int cfgLuzAlta = 75;
 
 uint32_t seqLoRa = 0;
+uint32_t cmdRxCount = 0;
+float lastCmdRssi = 0.0;
+float lastCmdSnr = 0.0;
 bool loraOk = false;
 bool oledOk = false;
 unsigned long lastSensorRead = 0;
 unsigned long lastLoRaTx = 0;
 const unsigned long SENSOR_INTERVAL_MS = 600;
 const unsigned long LORA_TX_INTERVAL_MS = 5000;
+
+bool pendingImmediateTx = false;
+unsigned long immediateTxTime = 0;
 
 volatile bool loraRxFlag = false;
 #if defined(ESP8266) || defined(ESP32)
@@ -109,10 +119,15 @@ void onLoRaPacket() {
   loraRxFlag = true;
 }
 
-// ================= 3. ATUAÇÃO FÍSICA (SERVO, RELÉ 1 CANAL, LEDS, BUZZER) =================
+void agendarTelemetriaImediata(unsigned long delayMs = 140) {
+  pendingImmediateTx = true;
+  immediateTxTime = millis() + delayMs;
+}
+
+// ================= 3. ATUAÇÃO FÍSICA (SERVO, 4 RELÉS, LEDS, BUZZER) =================
 void aplicarAnguloPersiana(int novoAngulo) {
   novoAngulo = constrain(novoAngulo, 0, 180);
-  if (abs(novoAngulo - anguloPersiana) >= 3) {
+  if (abs(novoAngulo - anguloPersiana) >= 2) {
     if (!buzzerMute && !servoProporcional) {
       digitalWrite(PIN_BUZZER, HIGH);
       delay(25);
@@ -218,7 +233,7 @@ void atualizarDisplayOLED() {
   display.setCursor(0, 0);
   display.print(modoAutomatico ? "[AUTO]" : "[MAN] ");
   display.print(dhtConectado ? " DHT:OK" : " DHT:--");
-  display.print(" LR:#");
+  display.print(" TX:");
   display.println(seqLoRa);
   display.drawLine(0, 9, 127, 9, SSD1306_WHITE);
 
@@ -246,12 +261,18 @@ void atualizarDisplayOLED() {
                  saidaEstado[0], saidaEstado[1], saidaEstado[2], saidaEstado[3]);
 
   display.setCursor(0, 55);
-  display.print(alarmeAtivo ? "ALARME TEMP CRITICA!" : "AP: 192.168.4.1");
+  if (alarmeAtivo) {
+    display.print("ALARME TEMP CRITICA!");
+  } else if (cmdRxCount > 0) {
+    display.printf("RX:#%lu RSSI:%.0fdBm", cmdRxCount, lastCmdRssi);
+  } else {
+    display.print("LoRa 915MHz -> ESP2");
+  }
 
   display.display();
 }
 
-// ================= 6. COMUNICAÇÃO LORA 915 MHz =================
+// ================= 6. COMUNICAÇÃO LORA 915 MHz (ESP 1 <-> ESP 2 GATEWAY) =================
 String montarJsonTelemetria() {
   JsonDocument doc;
   doc["id"] = "EST01";
@@ -259,12 +280,16 @@ String montarJsonTelemetria() {
   doc["t"] = serialized(String(tempAtual, 1));
   doc["h"] = serialized(String(umidAtual, 1));
   doc["l"] = luzPercent;
+  doc["adc"] = adcLdrBruto;
   doc["srv"] = anguloPersiana;
   JsonArray r = doc["r"].to<JsonArray>();
   for (int i = 0; i < 4; i++) {
     r.add(saidaEstado[i] ? 1 : 0);
   }
   doc["al"] = alarmeAtivo ? 1 : 0;
+  doc["buz"] = buzzerMute ? 0 : 1;
+  doc["inv"] = RELE_ATIVO_LOW ? 1 : 0;
+  doc["dht"] = dhtConectado ? 1 : 0;
   doc["m"] = modoAutomatico ? "AUTO" : "MAN";
 
   String output;
@@ -278,44 +303,114 @@ void enviarTelemetriaLoRa() {
   String payload = montarJsonTelemetria();
   int state = radio.transmit(payload.c_str());
   if (state == RADIOLIB_ERR_NONE) {
-    Serial.printf("[LoRa TX #%lu] %s\n", seqLoRa, payload.c_str());
+    Serial.printf("[LoRa TX -> ESP2 #%lu] %s\n", seqLoRa, payload.c_str());
+  } else {
+    Serial.printf("[LoRa TX ERRO] Codigo: %d\n", state);
   }
   radio.startReceive();
+  atualizarDisplayOLED();
 }
 
 void processarComandoJson(const String& jsonStr) {
   JsonDocument doc;
-  if (deserializeJson(doc, jsonStr)) return;
+  DeserializationError err = deserializeJson(doc, jsonStr);
+  if (err) {
+    Serial.printf("[LoRa RX ERRO JSON] %s | Payload: %s\n", err.c_str(), jsonStr.c_str());
+    return;
+  }
+
+  // Ignora pacotes de telemetria de outra estufa caso não sejam comandos
+  if (doc["id"].is<const char*>() && !doc["cmd"].is<const char*>()) {
+    return;
+  }
+
+  cmdRxCount++;
+  Serial.printf("[LoRa RX <- ESP2 #%lu] %s (RSSI: %.1f dBm | SNR: %.1f dB)\n",
+                cmdRxCount, jsonStr.c_str(), lastCmdRssi, lastCmdSnr);
 
   const char* cmd = doc["cmd"] | "SET";
-  if (strcmp(cmd, "SET") == 0) {
-    if (doc["m"].is<const char*>()) {
-      modoAutomatico = (String(doc["m"].as<const char*>()) == "AUTO");
-    }
-    if (!modoAutomatico) {
-      if (doc["srv"].is<int>()) {
-        aplicarAnguloPersiana(doc["srv"].as<int>());
-      }
-      if (doc["r"].is<JsonArray>()) {
-        JsonArray arr = doc["r"].as<JsonArray>();
-        for (int i = 0; i < 4 && i < arr.size(); i++) {
-          saidaEstado[i] = (arr[i].as<int>() == 1);
-        }
-      }
-    }
-    if (doc["buz"].is<int>()) {
-      buzzerMute = (doc["buz"].as<int>() == 0);
-    }
-    atualizarSaidasFisicas();
+
+  if (strcmp(cmd, "PING") == 0) {
+    agendarTelemetriaImediata(120);
+    atualizarDisplayOLED();
+    return;
   }
+
+  if (strcmp(cmd, "CFG") == 0) {
+    if (doc["tMax"].is<float>() || doc["tMax"].is<int>()) cfgTempMax = doc["tMax"].as<float>();
+    if (doc["tMin"].is<float>() || doc["tMin"].is<int>()) cfgTempMin = doc["tMin"].as<float>();
+    if (doc["tCrit"].is<float>() || doc["tCrit"].is<int>()) cfgTempCritica = doc["tCrit"].as<float>();
+    if (doc["hMin"].is<float>() || doc["hMin"].is<int>()) cfgUmidMin = doc["hMin"].as<float>();
+    if (doc["lMin"].is<int>()) cfgLuzBaixa = constrain(doc["lMin"].as<int>(), 0, 100);
+    if (doc["lMax"].is<int>()) cfgLuzAlta = constrain(doc["lMax"].as<int>(), 0, 100);
+    if (doc["inv"].is<int>()) RELE_ATIVO_LOW = (doc["inv"].as<int>() == 1);
+    if (doc["invLdr"].is<int>()) INVERTER_LDR = (doc["invLdr"].as<int>() == 1);
+    if (modoAutomatico) {
+      executarControleAutomatico();
+    } else {
+      atualizarSaidasFisicas();
+    }
+    atualizarDisplayOLED();
+    agendarTelemetriaImediata(140);
+    return;
+  }
+
+  // Comandos de atuação (SET)
+  if (doc["m"].is<const char*>()) {
+    modoAutomatico = (String(doc["m"].as<const char*>()) == "AUTO");
+  }
+
+  // Se recebeu comando direto de servo ou relé sem especificar modo AUTO, entra em modo MANUAL
+  if (doc["srv"].is<int>() || doc["r"].is<JsonArray>() || doc["ch"].is<int>()) {
+    if (!doc["m"].is<const char*>() || String(doc["m"].as<const char*>()) != "AUTO") {
+      modoAutomatico = false;
+    }
+  }
+
+  if (modoAutomatico) {
+    executarControleAutomatico();
+  } else {
+    if (doc["srv"].is<int>()) {
+      aplicarAnguloPersiana(doc["srv"].as<int>());
+    }
+    if (doc["r"].is<JsonArray>()) {
+      JsonArray arr = doc["r"].as<JsonArray>();
+      for (int i = 0; i < 4 && i < arr.size(); i++) {
+        saidaEstado[i] = (arr[i].as<int>() == 1);
+      }
+    }
+    if (doc["ch"].is<int>()) {
+      int ch = constrain(doc["ch"].as<int>(), 0, 3);
+      if (doc["state"].is<int>()) {
+        saidaEstado[ch] = (doc["state"].as<int>() == 1);
+      } else if (doc["state"].is<bool>()) {
+        saidaEstado[ch] = doc["state"].as<bool>();
+      } else {
+        saidaEstado[ch] = !saidaEstado[ch];
+      }
+    }
+  }
+
+  if (doc["buz"].is<int>()) {
+    buzzerMute = (doc["buz"].as<int>() == 0);
+  }
+  if (doc["inv"].is<int>()) {
+    RELE_ATIVO_LOW = (doc["inv"].as<int>() == 1);
+  }
+
+  atualizarSaidasFisicas();
   atualizarDisplayOLED();
+  agendarTelemetriaImediata(140);
 }
 
 void verificarComandosLoRa() {
   if (!loraOk || !loraRxFlag) return;
   loraRxFlag = false;
   String rxStr;
-  if (radio.readData(rxStr) == RADIOLIB_ERR_NONE && rxStr.length() > 0) {
+  int state = radio.readData(rxStr);
+  if (state == RADIOLIB_ERR_NONE && rxStr.length() > 0) {
+    lastCmdRssi = radio.getRSSI();
+    lastCmdSnr = radio.getSNR();
     processarComandoJson(rxStr);
   }
   radio.startReceive();
@@ -335,13 +430,15 @@ void configurarRotasWeb() {
     html += ".btn-sec{background:#38bdf8;color:#000;border:none;padding:8px;border-radius:6px;font-weight:bold;cursor:pointer;width:100%;margin-top:6px;}";
     html += ".btn-off{background:#475569;color:#fff;}";
     html += "</style></head><body>";
-    html += "<h2>Nó Estufa — 4 Relés (Lado do Pino 47)</h2>";
+    html += "<h2>ESP 1: Nó Estufa — 4 Relés (LoRa 915 MHz)</h2>";
 
     html += "<div class='card'><div class='grid'>";
     html += "<div><b>Temp (DHT11 P5):</b><br>" + String(tempAtual, 1) + " °C " + String(dhtConectado ? "(OK)" : "(Simulado)") + "</div>";
     html += "<div><b>Umidade (DHT11 P5):</b><br>" + String(umidAtual, 1) + " %</div>";
     html += "<div><b>Luz (LDR P4):</b><br>" + String(luzPercent) + "% (ADC: " + String(adcLdrBruto) + ")</div>";
     html += "<div><b>Persiana (Servo P6):</b><br>" + String(anguloPersiana) + "°</div>";
+    html += "<div><b>LoRa TX -> ESP2:</b><br>#" + String(seqLoRa) + "</div>";
+    html += "<div><b>Comandos RX <- ESP2:</b><br>#" + String(cmdRxCount) + " (" + String(lastCmdRssi, 0) + " dBm)</div>";
     html += "</div></div>";
 
     html += "<div class='card'><h3>Modo Atual: " + String(modoAutomatico ? "AUTOMÁTICO" : "MANUAL") + "</h3>";
@@ -375,6 +472,7 @@ void configurarRotasWeb() {
     modoAutomatico = !modoAutomatico;
     if (modoAutomatico) executarControleAutomatico();
     atualizarDisplayOLED();
+    agendarTelemetriaImediata(80);
     server.sendHeader("Location", "/");
     server.send(303);
   });
@@ -383,6 +481,7 @@ void configurarRotasWeb() {
     RELE_ATIVO_LOW = !RELE_ATIVO_LOW;
     atualizarSaidasFisicas();
     atualizarDisplayOLED();
+    agendarTelemetriaImediata(80);
     server.sendHeader("Location", "/");
     server.send(303);
   });
@@ -392,6 +491,7 @@ void configurarRotasWeb() {
     int ang = server.arg("ang").toInt();
     aplicarAnguloPersiana(ang);
     atualizarDisplayOLED();
+    agendarTelemetriaImediata(80);
     server.sendHeader("Location", "/");
     server.send(303);
   });
@@ -402,6 +502,7 @@ void configurarRotasWeb() {
     saidaEstado[ch] = !saidaEstado[ch];
     atualizarSaidasFisicas();
     atualizarDisplayOLED();
+    agendarTelemetriaImediata(80);
     server.sendHeader("Location", "/");
     server.send(303);
   });
@@ -458,6 +559,9 @@ void setup() {
     loraOk = true;
     radio.setDio1Action(onLoRaPacket);
     radio.startReceive();
+    Serial.println("[LoRa SX1262] Iniciado em 915 MHz (Pronto para comunicar com ESP 2 Gateway).");
+  } else {
+    Serial.printf("[ERRO LoRa] Falha ao iniciar SX1262: %d\n", loraState);
   }
 
   WiFi.mode(WIFI_AP);
@@ -467,11 +571,18 @@ void setup() {
   lerSensores();
   executarControleAutomatico();
   atualizarDisplayOLED();
+  enviarTelemetriaLoRa();
 }
 
 void loop() {
   server.handleClient();
   verificarComandosLoRa();
+
+  if (pendingImmediateTx && millis() >= immediateTxTime) {
+    pendingImmediateTx = false;
+    lastLoRaTx = millis();
+    enviarTelemetriaLoRa();
+  }
 
   if (millis() - lastSensorRead >= SENSOR_INTERVAL_MS) {
     lastSensorRead = millis();
@@ -491,6 +602,7 @@ void loop() {
       modoAutomatico = !modoAutomatico;
       if (modoAutomatico) executarControleAutomatico();
       atualizarDisplayOLED();
+      agendarTelemetriaImediata(80);
       while (digitalRead(BTN_PRG) == LOW) {
         server.handleClient();
         delay(10);
