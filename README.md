@@ -2,10 +2,10 @@
 
 ![ESP32](https://img.shields.io/badge/Hardware-ESP32--S3%20LoRa%20915MHz%20(Heltec%20V3)-blue?style=flat-square&logo=espressif)
 ![Protocolo](https://img.shields.io/badge/R%C3%A1dio-LoRa%20SX1262%20%7C%20MQTT-orange?style=flat-square)
-![Nuvem](https://img.shields.io/badge/Nuvem-Node--RED%20%7C%20PostgreSQL-red?style=flat-square&logo=nodered)
-![Web](https://img.shields.io/badge/Web%20Dashboard-GitHub%20Pages-success?style=flat-square&logo=github)
+![Nuvem](https://img.shields.io/badge/Nuvem-Vercel%20API%20%7C%20Node--RED%20%7C%20Neon%20PostgreSQL-red?style=flat-square&logo=vercel)
+![Web](https://img.shields.io/badge/Web%20Dashboard-Vercel%20%7C%20MQTT%20WSS-success?style=flat-square&logo=vercel)
 
-Sistema completo de **Internet das Coisas (IoT)** para monitoramento microclimático e controle automatizado de uma **estufa agrícola remota** sem cobertura Wi-Fi local. O projeto utiliza dois microcontroladores **ESP32-S3 LoRa 915 MHz (Heltec WiFi LoRa 32 V3)** operando em arquitetura *Nó Sensor/Atuador $\leftrightarrow$ Gateway*, integrados a um broker **MQTT**, fluxos de automação em **Node-RED**, persistência histórica em **Banco de Dados em Nuvem** e uma **Aplicação Web de Gerenciamento Remoto**.
+Sistema completo de **Internet das Coisas (IoT)** para monitoramento microclimático e controle automatizado de uma **estufa agrícola remota** sem cobertura Wi-Fi local. O projeto utiliza dois microcontroladores **ESP32-S3 LoRa 915 MHz (Heltec WiFi LoRa 32 V3)** operando em arquitetura *Nó Sensor/Atuador (ESP 1) $\leftrightarrow$ Gateway (ESP 2)*, integrados em tempo real via **Broker MQTT (`broker.emqx.io`)**, **API Serverless na Vercel (`/api/historico`)**, fluxos de automação em **Node-RED**, persistência histórica em **Banco de Dados Neon PostgreSQL** e uma **Aplicação Web de Gerenciamento Remoto**.
 
 > **Universidade Federal de São Paulo (UNIFESP)** — Instituto de Ciência e Tecnologia (ICT - SJC)  
 > **Disciplina:** Internet das Coisas (IdC) — Prof. Dr. Gabriel de Freitas Fernandes
@@ -34,12 +34,12 @@ Sistema completo de **Internet das Coisas (IoT)** para monitoramento microclimá
 
 Estufas de cultivo frequentemente estão afastadas de pontos de acesso Wi-Fi. Para contornar essa limitação e garantir alta confiabilidade, o **SmartGreenhouse LoRa** organiza a solução em três camadas:
 
-1. **Nó Estufa (ESP32-S3 Heltec WiFi LoRa 32 V3 — Remoto):** Instalado na estufa em uma placa/circuito dedicado. Realiza a leitura contínua de **luminosidade (LDR)** e **temperatura e umidade do ar (DHT11)**, exibe o diagnóstico no **Display OLED SSD1306 integrado**, controla o ângulo da **persiana via 1 servomotor**, aciona **2 módulos Relé de 2 Canais 5V (totalizando 4 canais, ativos em HIGH)** (Ventoinha 5V de exaustão no canal `D1/IN1` do Módulo 1, iluminação de cultivo no `D2/IN2` do Módulo 1, bomba de irrigação no `D1/IN1` do Módulo 2 e aquecedor no `D2/IN2` do Módulo 2) e sinaliza status localmente (**LEDs Verde/Vermelho e Buzzer**). Possui controle autônomo local (*fail-safe*) caso o link de rádio caia.
-2. **Nó Gateway (ESP32-S3 Heltec WiFi LoRa 32 V3 — Central):** Localizado na sede com conexão Wi-Fi. Recebe os pacotes LoRa em 915 MHz (via transceptor Semtech SX1262), registra a qualidade de enlace (`RSSI` e `SNR`) e publica os dados via **MQTT** na nuvem, além de retransmitir comandos recebidos da interface web para a estufa. Conta com suporte a **atualização remota de firmware (OTA)**.
+1. **Nó Estufa — ESP 1 (ESP32-S3 Heltec WiFi LoRa 32 V3 — Remoto):** Instalado na estufa sem necessidade de internet local. Realiza a leitura contínua de **luminosidade (LDR no GPIO 4)** e **temperatura e umidade do ar (DHT11 no GPIO 5)**, exibe o diagnóstico no **Display OLED SSD1306 integrado**, controla o ângulo da **persiana via 1 servomotor (GPIO 6)**, aciona **2 módulos Relé de 2 Canais 5V (totalizando 4 canais ativos em HIGH nos GPIOs 47, 48, 33 e 34)** (Ventoinha 5V de exaustão no canal `D1/IN1` do Módulo 1, iluminação de cultivo no `D2/IN2` do Módulo 1, bomba de irrigação no `D1/IN1` do Módulo 2 e aquecedor no `D2/IN2` do Módulo 2) e sinaliza status localmente (**LEDs Verde/Vermelho e Buzzer**). Transmite telemetria via **LoRa 915 MHz** a cada 5s (e imediatamente após executar qualquer comando recebido do ESP 2) e mantém controle autônomo local (*fail-safe*).
+2. **Nó Gateway — ESP 2 (ESP32-S3 Heltec WiFi LoRa 32 V3 — Central):** Localizado na sede com conexão Wi-Fi 2.4 GHz. Recebe os pacotes LoRa em 915 MHz vindos do ESP 1 (via transceptor Semtech SX1262), afere a qualidade do enlace de rádio (`RSSI` em dBm e `SNR` em dB) e encaminha os dados simultaneamente para o **Broker MQTT (`broker.emqx.io`)** e via **HTTPS POST para a API Serverless da Vercel (`/api/historico`)**. No sentido inverso, recebe ordens enviadas pelo Site Web ou Node-RED e as transmite imediatamente via **LoRa 915 MHz** para o ESP 1. Conta ainda com portal web local (`Gateway_LoRa_V3` $\rightarrow$ `http://192.168.4.1`) para configuração dinâmica de Wi-Fi/MQTT e suporte a **atualização remota de firmware (ArduinoOTA)**.
 3. **Nuvem, Banco de Dados e Site Web:**
-   * **Node-RED:** Orquestra a ingestão dos pacotes MQTT, executa regras de negócio e limites de alarme, persiste os registros no banco de dados e disponibiliza o painel de controle `/ui`.
-   * **Banco de Dados Histórico (Supabase / PostgreSQL):** Armazena a série temporal completa de leituras dos sensores, posições da persiana e estados das saídas.
-   * **Site Web de Controle (`web/`):** Interface web responsiva hospedada diretamente neste repositório via **GitHub Pages**, conectada em tempo real via **MQTT over WebSockets (WSS)** e integrada à API do banco para visualização de gráficos históricos.
+   * **API Serverless Vercel (`api/historico.js`) + Neon PostgreSQL:** Cria automaticamente as tabelas `historico_estufa` e `comandos_estufa`, armazena a série temporal completa de leituras/estados e enfileira comandos remotos para o Gateway.
+   * **Node-RED (`nuvem_nodered/flows_estufa.json`):** Orquestra a ingestão dos pacotes MQTT, formata payloads para o banco SQL e disponibiliza botões de injeção de comandos.
+   * **Site Web de Controle (`web/`):** Interface web responsiva hospedada na **Vercel** (e executável localmente), conectada em tempo real via **MQTT over WebSockets (`wss://broker.emqx.io:8084/mqtt`)** e integrada à API `/api/historico` para exibição de gráficos históricos (Chart.js) e tabela de registros.
 
 ---
 
@@ -60,24 +60,26 @@ flowchart LR
         RF(("Semtech SX1262\nP2P Bidirecional"))
     end
 
-    subgraph Gateway["Nó Gateway (Heltec V3 Central)"]
-        ESP_GW["ESP32-S3 Heltec V3\n(Bridge LoRa <-> MQTT\n+ Firmware OTA)"]
+    subgraph Gateway["ESP 2: Nó Gateway (Heltec V3 Central)"]
+        ESP_GW["ESP32-S3 Heltec V3\n(Bridge LoRa <-> MQTT & HTTPS\n+ Portal 192.168.4.1 + OTA)"]
     end
 
     subgraph Cloud["Nuvem & Gerenciamento Web"]
-        BROKER["Broker MQTT Cloud\n(TLS 8883 / WSS 8884)"]
-        NODERED["Node-RED\n(Ingestão + Dashboard)"]
-        DB[("Banco de Dados\n(Histórico Cloud)")]
-        SITE["Site Web Responsivo\n(GitHub Pages)"]
+        BROKER["Broker MQTT EMQX\n(TCP 1883 / WSS 8084)"]
+        API["Vercel Serverless API\n(/api/historico)"]
+        NODERED["Node-RED\n(Ingestão + Automação)"]
+        DB[("Neon PostgreSQL\n(Histórico em Nuvem)")]
+        SITE["Site Web Responsivo\n(Vercel + Chart.js)"]
     end
 
-    ESP_EST <==>|"Telemetria & Comandos"| RF
+    ESP_EST <==>|"Telemetria & Ordens"| RF
     RF <==>|"RSSI / SNR"| ESP_GW
-    ESP_GW <==>|"Wi-Fi (MQTT TLS)"| BROKER
+    ESP_GW <==>|"Wi-Fi (MQTT)"| BROKER
+    ESP_GW <==>|"HTTPS POST"| API
+    API <==>|"SQL"| DB
     BROKER <==>|"Pub/Sub"| NODERED
-    NODERED ==>|"INSERT"| DB
     BROKER <==>|"WebSockets (WSS)"| SITE
-    DB -.->|"Consulta Histórico"| SITE
+    API <==>|"Histórico & Comandos"| SITE
 ```
 
 ---
@@ -139,28 +141,31 @@ O circuito do Nó Estufa foi dimensionado para a placa **Heltec WiFi LoRa 32 V3 
 ## Protocolo de Mensagens (LoRa & MQTT)
 
 ### Pacotes LoRa (915 MHz)
-* **Telemetria (Estufa $\rightarrow$ Gateway a cada 5s):**
+* **Telemetria (ESP 1 Estufa $\rightarrow$ ESP 2 Gateway a cada 5s e após comandos):**
   ```json
-  {"id":"EST01","seq":142,"t":26.4,"h":62.0,"l":78,"srv":90,"r":[0,0,0,0],"al":0,"m":"AUTO"}
+  {"id":"EST01","seq":301,"t":28.9,"h":48.0,"l":83,"adc":3421,"srv":160,"r":[1,0,0,0],"al":0,"buz":1,"inv":0,"dht":1,"m":"AUTO"}
   ```
-  *(Onde: `t` = Temp °C, `h` = Umidade %, `l` = Luz %, `srv` = Ângulo do servo, `r` = Estado dos 4 Relés R1..R4, `al` = Alarme, `m` = Modo).*
-* **Comando de Atuação (Gateway $\rightarrow$ Estufa sob demanda):**
+  *(Onde: `t` = Temp °C, `h` = Umidade %, `l` = Luz %, `adc` = Leitura ADC bruta do LDR, `srv` = Ângulo do servo, `r` = Estado dos 4 Relés R1..R4 nos pinos 47/48/33/34, `al` = Alarme, `buz` = Buzzer ativo, `inv` = Lógica invertida, `dht` = Status do DHT11, `m` = Modo).*
+* **Comando de Atuação (ESP 2 Gateway $\rightarrow$ ESP 1 Estufa sob demanda):**
   ```json
-  {"target":"EST01","cmd":"SET","m":"MAN","srv":45,"r":[1,0,0,0],"buz":0}
+  {"target":"EST01","cmd":"SET","m":"MAN","srv":45,"ch":0,"state":1,"buz":1,"inv":0}
   ```
-* **Configuração de Limiares (Gateway $\rightarrow$ Estufa):**
+* **Configuração de Limiares (ESP 2 Gateway $\rightarrow$ ESP 1 Estufa):**
   ```json
-  {"target":"EST01","cmd":"CFG","tMax":28.0,"tMin":18.0,"hMin":45.0,"lMin":25}
+  {"target":"EST01","cmd":"CFG","tMax":28.0,"tMin":18.0,"tCrit":35.0,"hMin":45.0,"lMin":25,"lMax":75}
   ```
 
 ### Tópicos MQTT
+> Broker padrão configurado: `broker.emqx.io` (`TCP 1883` no ESP 2 e `WSS 8084` no Site Web).
 | Tópico | Direção | Descrição |
 | :--- | :---: | :--- |
-| `unifesp/iot/estufa/telemetria` | `Gateway -> Nuvem` | Payload JSON completo da estufa acrescido de `RSSI` e `SNR` do link LoRa |
-| `unifesp/iot/estufa/comando/modo` | `Nuvem -> Gateway` | Define o modo de operação (`"AUTO"` ou `"MAN"`) |
-| `unifesp/iot/estufa/comando/persiana` | `Nuvem -> Gateway` | Define o ângulo da persiana (`0` a `180`) |
-| `unifesp/iot/estufa/comando/reles` | `Nuvem -> Gateway` | Aciona individualmente um dos 4 Relés (`{"ch":0,"state":1}`) |
-| `unifesp/iot/estufa/comando/config` | `Nuvem -> Gateway` | Reconfigura setpoints de automação remotamente |
+| `unifesp/iot/estufa/telemetria` | `ESP 2 Gateway -> Nuvem` | Payload JSON completo da estufa acrescido de `rssi`, `snr`, `gwId` e `gwRx` |
+| `unifesp/iot/estufa/gateway/status` | `ESP 2 Gateway -> Nuvem` | Heartbeat do Gateway com IP Wi-Fi, RSSI Wi-Fi, contadores LoRa/Vercel e uptime |
+| `unifesp/iot/estufa/comando` | `Site / Nuvem -> ESP 2` | Comando JSON unificado (`SET`, `CFG` ou `PING`) encaminhado via LoRa ao ESP 1 |
+| `unifesp/iot/estufa/comando/modo` | `Site / Nuvem -> ESP 2` | Define o modo de operação (`"AUTO"` ou `"MAN"`) |
+| `unifesp/iot/estufa/comando/persiana` | `Site / Nuvem -> ESP 2` | Define o ângulo da persiana (`0` a `180`) |
+| `unifesp/iot/estufa/comando/reles` | `Site / Nuvem -> ESP 2` | Aciona individualmente um dos 4 Relés (`{"ch":0,"state":1}`) |
+| `unifesp/iot/estufa/comando/config` | `Site / Nuvem -> ESP 2` | Reconfigura setpoints de automação remotamente |
 
 ---
 
@@ -176,14 +181,16 @@ projeto-IOT/
 ├── .githooks/                          # Hooks Git que bloqueiam commits diretos em main/develop
 │   ├── pre-commit
 │   └── pre-push
+├── api/
+│   └── historico.js                    # API Serverless Vercel (GET/POST Neon PostgreSQL + Fila de Comandos)
 ├── firmware/
 │   ├── no_estufa_lora/
-│   │   └── no_estufa_lora.ino          # Firmware do Nó Estufa (Heltec V3 + 4 Relés + Servo + Sensores)
+│   │   └── no_estufa_lora.ino          # Firmware do ESP 1: Nó Estufa (Heltec V3 + 4 Relés 47/48/33/34 + Servo + Sensores)
 │   ├── no_gateway_lora_mqtt/
-│   │   └── no_gateway_lora_mqtt.ino    # Firmware do Nó Gateway (Heltec V3 + Wi-Fi/MQTT + OTA)
+│   │   └── no_gateway_lora_mqtt.ino    # Firmware do ESP 2: Nó Gateway (Heltec V3 + LoRa <-> MQTT/Vercel + OTA)
 │   └── teste_hardware_lora_wifi_oled/
 │       └── teste_hardware_lora_wifi_oled.ino # Diagnóstico completo de bancada (SX1262 + OLED + AP)
-├── web/                                # Site de Gerenciamento Remoto (GitHub Pages)
+├── web/                                # Site de Gerenciamento Remoto (Vercel + MQTT over WebSockets)
 │   ├── index.html
 │   ├── css/
 │   │   └── styles.css
@@ -191,10 +198,10 @@ projeto-IOT/
 │       └── app.js
 ├── nuvem_nodered/
 │   ├── flows_estufa.json               # Fluxos exportados do Node-RED
-│   └── schema_banco.sql                # Script SQL da tabela de histórico
+│   └── schema_banco.sql                # Script SQL das tabelas historico_estufa e comandos_estufa
 ├── pci_hardware/
 │   ├── README.md
-│   └── lista_materiais_BOM.md          # Lista de componentes da PCI
+│   └── lista_materiais_BOM.md          # Lista de componentes da PCI (2x Módulos Relé Duplos, etc.)
 ├── encapsulamento_3d/
 │   └── README.md                       # Modelos 3D (.STL) do encapsulamento
 ├── docs/
@@ -202,6 +209,8 @@ projeto-IOT/
 │       └── README.md                   # Fotos e vídeos de validação
 ├── scripts/
 │   └── configure-branch-protection.ps1 # Script para ativar hooks e proteção de branch
+├── package.json                        # Dependências da API Serverless (@neondatabase/serverless)
+├── vercel.json                         # Regras de roteamento da Vercel para /web e /api/historico
 └── README.md
 ```
 
@@ -245,15 +254,15 @@ Este repositório conta com automação de governança (`.githooks/` e **GitHub 
      * **`PubSubClient`** (por Nick O'Leary)
 2. **Gravação do Firmware:**
    * Em **Ferramentas $\rightarrow$ Placa**, selecione **`Heltec WiFi LoRa 32(V3)`** (ou `ESP32S3 Dev Module`).
-   * Grave `no_estufa_lora.ino` no ESP32-S3 da Estufa e `no_gateway_lora_mqtt.ino` no ESP32-S3 Gateway.
-3. **Painel Web de Validação Local na Bancada:**
-   * O Nó Estufa inicia um ponto de acesso Wi-Fi próprio: **`Estufa_LoRa_V3`** (senha: **`12345678`**).
-   * Conectando pelo celular ou notebook e acessando **`http://192.168.4.1`**, é possível acionar manualmente o servomotor, os 4 módulos Relé e visualizar os sensores em tempo real.
-4. **Banco de Dados e Node-RED (`nuvem_nodered/`):**
-   * Execute o script `schema_banco.sql` na instância PostgreSQL/Supabase (ou SQLite).
-   * No Node-RED, importe o arquivo `flows_estufa.json`, configure as credenciais do Broker MQTT e do banco de dados e clique em **Deploy**.
+   * Grave `no_estufa_lora.ino` no **ESP 1 (Estufa)** e `no_gateway_lora_mqtt.ino` no **ESP 2 (Gateway)**.
+3. **Painéis Web de Validação e Configuração Local na Bancada (`192.168.4.1`):**
+   * **ESP 1 (Estufa):** Cria a rede Wi-Fi **`Estufa_LoRa_V3`** (senha: **`12345678`**). Acessando **`http://192.168.4.1`**, é possível testar localmente o servomotor, os 2 módulos Relé duplos (`P47`, `P48`, `P33`, `P34`) e os sensores.
+   * **ESP 2 (Gateway):** Cria a rede Wi-Fi **`Gateway_LoRa_V3`** (senha: **`12345678`**). Acessando **`http://192.168.4.1`**, é possível configurar o nome/senha do Wi-Fi 2.4 GHz da bancada, o host do Broker MQTT e a URL da Vercel sem precisar regravar o código.
+4. **Banco de Dados Neon PostgreSQL, Vercel e Node-RED (`api/` e `nuvem_nodered/`):**
+   * Na Vercel, conecte o banco **Neon PostgreSQL** (variável `DATABASE_URL`). O endpoint `/api/historico` criará automaticamente as tabelas `historico_estufa` e `comandos_estufa` (também documentadas em `nuvem_nodered/schema_banco.sql`).
+   * No Node-RED, importe o arquivo `flows_estufa.json` para monitorar os tópicos MQTT em `broker.emqx.io`.
 5. **Site de Gerenciamento Remoto (`web/`):**
-   * Acesse diretamente pela URL do **GitHub Pages** deste repositório ou abra `web/index.html` no navegador.
+   * Acesse pela URL da **Vercel** (ou abra `web/index.html` diretamente no navegador) para visualizar os sensores, o link LoRa (`RSSI`/`SNR`) e os gráficos históricos em tempo real, além de controlar remotamente a persiana e os 4 relés do ESP 1 através do ESP 2.
 
 ---
 
