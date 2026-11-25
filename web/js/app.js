@@ -93,8 +93,8 @@ function atualizarInterfaceTelemetria(dados) {
 
   const pillDht = document.getElementById("pillDht");
   if (pillDht && typeof dados.dht !== "undefined") {
-    pillDht.textContent = Number(dados.dht) === 1 ? "DHT11 OK" : "DHT11 Simulado";
-    pillDht.className = Number(dados.dht) === 1 ? "pill pill-green" : "pill pill-amber";
+    pillDht.textContent = Number(dados.dht) === 1 ? "DHT11 · OK" : "DHT11 · Simulado";
+    pillDht.className = Number(dados.dht) === 1 ? "tag pill-green" : "tag pill-amber";
   }
 
   // Umidade
@@ -108,7 +108,7 @@ function atualizarInterfaceTelemetria(dados) {
   if (estadoEstufa.luz !== null && !Number.isNaN(estadoEstufa.luz)) {
     document.getElementById("valLuz").textContent = estadoEstufa.luz;
     document.getElementById("barLuz").style.width = `${Math.min(100, Math.max(0, estadoEstufa.luz))}%`;
-    document.getElementById("pillAdc").textContent = `ADC: ${estadoEstufa.adc}`;
+    document.getElementById("pillAdc").textContent = `ADC ${estadoEstufa.adc}`;
   }
 
   // Rádio LoRa (ESP 1 -> ESP 2)
@@ -116,17 +116,17 @@ function atualizarInterfaceTelemetria(dados) {
     document.getElementById("valRssi").textContent = estadoEstufa.rssi;
     const pctRssi = Math.min(100, Math.max(5, ((estadoEstufa.rssi + 120) / 90) * 100));
     document.getElementById("barRssi").style.width = `${pctRssi}%`;
-    atualizarBadge("dotLoRa", "txtLoRaStatus", "on", `ESP 1 LoRa: ${estadoEstufa.rssi} dBm`);
+    atualizarBadge("dotLoRa", "txtLoRaStatus", "on", `LoRa: ${estadoEstufa.rssi} dBm`);
   }
   if (estadoEstufa.snr !== null && !Number.isNaN(estadoEstufa.snr)) {
     document.getElementById("valSnr").textContent = `${estadoEstufa.snr.toFixed(1)} dB`;
   }
-  document.getElementById("pillSeq").textContent = `Pacote #${estadoEstufa.seq}`;
-  atualizarBadge("dotGw", "txtGwStatus", "on", "ESP 2 Gateway: Online");
+  document.getElementById("pillSeq").textContent = `#${estadoEstufa.seq}`;
+  atualizarBadge("dotGw", "txtGwStatus", "on", "Gateway: online");
 
   // Horário
   const agoraStr = new Date().toLocaleTimeString("pt-BR");
-  document.getElementById("txtLastUpdate").textContent = `Último pacote LoRa: ${agoraStr}`;
+  document.getElementById("txtLastUpdate").textContent = `Último pacote recebido às ${agoraStr}`;
 
   // Modo Automático / Manual
   const isAuto = estadoEstufa.modo === "AUTO";
@@ -160,8 +160,8 @@ function atualizarInterfaceTelemetria(dados) {
   // Lógica dos Relés e Buzzer
   const invAtivo = estadoEstufa.invRele === 1;
   document.getElementById("pillLogicaRele").textContent = invAtivo ? "Ativo em LOW" : "Ativo em HIGH";
-  document.getElementById("txtInvRele").textContent = invAtivo ? "LOW (0V Liga)" : "HIGH (3.3V Liga)";
-  document.getElementById("txtBuzzer").textContent = estadoEstufa.buzzer === 1 ? "Ativo" : "Silenciado (Mute)";
+  document.getElementById("txtInvRele").textContent = invAtivo ? "LOW (0V)" : "HIGH (3.3V)";
+  document.getElementById("txtBuzzer").textContent = estadoEstufa.buzzer === 1 ? "Ativo" : "Silenciado";
 
   // Banner de Alarme Crítico
   const banner = document.getElementById("alarmBanner");
@@ -191,7 +191,7 @@ function publicarComandoMqtt(topico, payloadObj) {
     adicionarLog("tx", `ORDEM MQTT -> ${topico}: ${payloadStr}`);
   } else {
     // 2. Fallback via API da Vercel (/api/historico?tipo=comando) apenas quando MQTT estiver desconectado
-    adicionarLog("sys", "⚠️ MQTT reconectando — enviando ordem via API da Vercel...");
+    adicionarLog("sys", "MQTT reconectando — enviando ordem via API da Vercel...");
     fetch("/api/historico?tipo=comando", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -299,8 +299,8 @@ function conectarMqtt() {
     } catch (_) {}
   }
 
-  atualizarBadge("dotMqtt", "txtMqttStatus", "wait", "MQTT: Conectando...");
-  adicionarLog("sys", `Conectando ao Broker MQTT via WebSockets: ${brokerUrl}`);
+  atualizarBadge("dotMqtt", "txtMqttStatus", "wait", "MQTT: conectando");
+  adicionarLog("sys", `Conectando ao broker MQTT: ${brokerUrl}`);
 
   const clientId = "unifesp_web_" + Math.random().toString(16).substring(2, 10);
   mqttClient = mqtt.connect(brokerUrl, {
@@ -311,17 +311,17 @@ function conectarMqtt() {
   });
 
   mqttClient.on("connect", () => {
-    atualizarBadge("dotMqtt", "txtMqttStatus", "on", "MQTT: Conectado");
-    adicionarLog("sys", `✅ Conectado ao Broker MQTT (${clientId}). Escutando ESP 2 Gateway...`);
+    atualizarBadge("dotMqtt", "txtMqttStatus", "on", "MQTT: conectado");
+    adicionarLog("sys", `Conectado ao broker MQTT (${clientId}).`);
     mqttClient.subscribe([TOPIC_TELEMETRIA, TOPIC_GW_STATUS], { qos: 0 });
   });
 
   mqttClient.on("reconnect", () => {
-    atualizarBadge("dotMqtt", "txtMqttStatus", "wait", "MQTT: Reconectando...");
+    atualizarBadge("dotMqtt", "txtMqttStatus", "wait", "MQTT: reconectando");
   });
 
   mqttClient.on("error", (err) => {
-    atualizarBadge("dotMqtt", "txtMqttStatus", "off", "MQTT: Erro");
+    atualizarBadge("dotMqtt", "txtMqttStatus", "off", "MQTT: erro");
     adicionarLog("sys", `Erro MQTT: ${err.message}`);
   });
 
@@ -330,10 +330,10 @@ function conectarMqtt() {
     try {
       const json = JSON.parse(raw);
       if (topic === TOPIC_TELEMETRIA) {
-        adicionarLog("rx", `TELEMETRIA (ESP1->LoRa->ESP2): ${raw}`);
+        adicionarLog("rx", `RX ${raw}`);
         atualizarInterfaceTelemetria(json);
       } else if (topic === TOPIC_GW_STATUS) {
-        atualizarBadge("dotGw", "txtGwStatus", "on", `ESP 2 GW: Online (${json.ip || "OK"})`);
+        atualizarBadge("dotGw", "txtGwStatus", "on", `Gateway: ${json.ip || "online"}`);
         if (json.ip) {
           document.getElementById("valGwIp").textContent = json.ip;
         }
@@ -357,25 +357,31 @@ function inicializarGrafico() {
         {
           label: "Temperatura (°C)",
           data: [],
-          borderColor: "#ef4444",
-          backgroundColor: "rgba(239, 68, 68, 0.12)",
-          tension: 0.3,
+          borderColor: "#c2410c",
+          backgroundColor: "rgba(194, 65, 12, 0.08)",
+          borderWidth: 2,
+          pointRadius: 2,
+          tension: 0.25,
           fill: false
         },
         {
           label: "Umidade (%)",
           data: [],
-          borderColor: "#38bdf8",
-          backgroundColor: "rgba(56, 189, 248, 0.12)",
-          tension: 0.3,
+          borderColor: "#0369a1",
+          backgroundColor: "rgba(3, 105, 161, 0.08)",
+          borderWidth: 2,
+          pointRadius: 2,
+          tension: 0.25,
           fill: false
         },
         {
           label: "Luminosidade (%)",
           data: [],
-          borderColor: "#f59e0b",
-          backgroundColor: "rgba(245, 158, 11, 0.12)",
-          tension: 0.3,
+          borderColor: "#b45309",
+          backgroundColor: "rgba(180, 83, 9, 0.08)",
+          borderWidth: 2,
+          pointRadius: 2,
+          tension: 0.25,
           fill: false
         }
       ]
@@ -384,11 +390,13 @@ function inicializarGrafico() {
       responsive: true,
       maintainAspectRatio: false,
       scales: {
-        x: { ticks: { color: "#94a3b8" }, grid: { color: "#1e293b" } },
-        y: { ticks: { color: "#94a3b8" }, grid: { color: "#1e293b" }, suggestedMin: 0, suggestedMax: 100 }
+        x: { ticks: { color: "#5c6860" }, grid: { color: "#eef1ec" } },
+        y: { ticks: { color: "#5c6860" }, grid: { color: "#eef1ec" }, suggestedMin: 0, suggestedMax: 100 }
       },
       plugins: {
-        legend: { labels: { color: "#f8fafc" } }
+        legend: {
+          labels: { color: "#18201b", boxWidth: 12, usePointStyle: true }
+        }
       }
     }
   });
@@ -451,10 +459,45 @@ async function carregarHistoricoBanco() {
       telemetryChart.data.datasets[2].data.push(Number(r.luminosidade));
     });
     telemetryChart.update();
-    adicionarLog("sys", `☁️ Histórico carregado do banco Neon na Vercel (${rows.length} registros).`);
+    renderizarTabelaHistorico(rows.slice(0, 10));
+    adicionarLog("sys", `Histórico carregado do PostgreSQL (${rows.length} registros).`);
   } catch (_) {
     // Silencioso caso esteja rodando localmente sem serverless API
   }
+}
+
+function renderizarTabelaHistorico(rows) {
+  const tbody = document.getElementById("historyTableBody");
+  if (!tbody) return;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Nenhum registro encontrado no banco.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r) => {
+    const hora = r.created_at ? new Date(r.created_at).toLocaleTimeString("pt-BR") : "--";
+    const temp = r.temperatura != null ? `${Number(r.temperatura).toFixed(1)} °C` : "--";
+    const umid = r.umidade != null ? `${Number(r.umidade).toFixed(0)}%` : "--";
+    const luz = r.luminosidade != null ? `${r.luminosidade}%` : "--";
+    const srv = r.angulo_persiana != null ? `${r.angulo_persiana}°` : "--";
+    const reles = [
+      r.rele1_exaustor ? "1" : "0",
+      r.rele2_iluminacao ? "1" : "0",
+      r.rele3_irrigacao ? "1" : "0",
+      r.rele4_aquecedor ? "1" : "0"
+    ].join(" ");
+    const modo = r.modo_operacao || "--";
+    const rssi = r.lora_rssi != null ? `${r.lora_rssi} dBm` : "--";
+    return `<tr>
+      <td class="mono">${hora}</td>
+      <td class="mono">${temp}</td>
+      <td class="mono">${umid}</td>
+      <td class="mono">${luz}</td>
+      <td class="mono">${srv}</td>
+      <td class="mono">${reles}</td>
+      <td>${modo}</td>
+      <td class="mono">${rssi}</td>
+    </tr>`;
+  }).join("");
 }
 
 async function salvarLeituraAtualNoBanco(silencioso = false) {
@@ -479,7 +522,8 @@ async function salvarLeituraAtualNoBanco(silencioso = false) {
       })
     });
     if (resp.ok && !silencioso) {
-      adicionarLog("sys", "☁️ Leitura salva com sucesso no banco de dados PostgreSQL.");
+      adicionarLog("sys", "Leitura salva no banco PostgreSQL.");
+      carregarHistoricoBanco();
     }
   } catch (_) {}
 }
