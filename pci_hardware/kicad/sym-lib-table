@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "heltec_iot")(type "KiCad")(uri "${KIPRJMOD}/heltec_iot.kicad_sym")(options "")(descr "Biblioteca Customizada UNIFESP IoT - Heltec V3 + Rele 4 Canais"))
+)

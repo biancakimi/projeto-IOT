@@ -2,15 +2,15 @@
  * ======================================================================================
  * PROJETO FINAL IoT (UNIFESP) — NÓ ESTUFA REMOTA (ESP 1: Heltec WiFi LoRa 32 V3)
  * ======================================================================================
- * Hardware configurado para 2x Módulos Relé de 2 Canais (Lado do Pino 47 - Header J2):
+ * Hardware configurado para 1x Módulo Relé de 4 Canais (Conector J2 na PCI):
  *   - Pino 4  (GPIO 4):  Sensor LDR (ADC1 12 bits)
  *   - Pino 5  (GPIO 5):  Sensor DHT11 (Temperatura e Umidade)
  *   - Pino 6  (GPIO 6):  Servomotor da Persiana (PWM 50 Hz)
- *   - 2x Módulos Relé Duplos (Ativos em HIGH por padrão — pinos 47, 48, 33 e 34):
- *       * Módulo 1 D1 (Ventoinha 5V):      Pino 47 (GPIO 47)
- *       * Módulo 1 D2 (Iluminação Cultivo): Pino 48 (GPIO 48)
- *       * Módulo 2 D1 (Bomba Irrigação):   Pino 33 (GPIO 33)
- *       * Módulo 2 D2 (Aquecedor):         Pino 34 (GPIO 34)
+ *   - 1x Módulo Relé de 4 Canais 5V (Pinos 47, 48, 33 e 34 — polaridade ajustável via site):
+ *       * Canal 1 / IN1 (Ventoinha 5V):       Pino 47 (GPIO 47)
+ *       * Canal 2 / IN2 (Iluminação Cultivo): Pino 48 (GPIO 48)
+ *       * Canal 3 / IN3 (Bomba Irrigação):    Pino 33 (GPIO 33)
+ *       * Canal 4 / IN4 (Aquecedor):          Pino 34 (GPIO 34)
  *   - Sinalização Local: Pino 41 (LED Verde Status), Pino 42 (Buzzer Alerta), Pino 40 (LED Vermelho Alarme)
  *
  * Comunicação LoRa 915 MHz com o ESP 2 (Nó Gateway):
@@ -55,11 +55,11 @@
 #define DHT_TYPE        DHT11
 #define PIN_SERVO       6    // Pino '6' -> Servomotor da Persiana
 
-// --- Pinos dos 2 Módulos Relé de 2 Canais (Fileira do Pino 47: 47, 48, 33, 34) ---
-#define PIN_RELE1       47   // Módulo 1 D1 -> Ventoinha / Exaustor 5V (Pino '47')
-#define PIN_RELE2       48   // Módulo 1 D2 -> Iluminação Artificial / Cultivo (Pino '48')
-#define PIN_RELE3       33   // Módulo 2 D1 -> Bomba de Irrigação (Pino '33')
-#define PIN_RELE4       34   // Módulo 2 D2 -> Aquecedor (Pino '34')
+// --- Pinos do Módulo Relé de 4 Canais (Fileira Esquerda da Heltec V3: 47, 48, 33, 34) ---
+#define PIN_RELE1       47   // Canal 1 (IN1) -> Ventoinha / Exaustor 5V (Pino '47')
+#define PIN_RELE2       48   // Canal 2 (IN2) -> Iluminação Artificial / Cultivo (Pino '48')
+#define PIN_RELE3       33   // Canal 3 (IN3) -> Bomba de Irrigação (Pino '33')
+#define PIN_RELE4       34   // Canal 4 (IN4) -> Aquecedor (Pino '34')
 
 // Sinalização Local de Alarme
 #define PIN_LED_VERM    40   // Pino '40' -> LED Vermelho Alarme Crítico
@@ -79,6 +79,8 @@ float umidAtual = 60.0;
 bool dhtConectado = false;
 int adcLdrBruto = 0;
 int luzPercent = 50;
+float luzFiltrada = 50.0;
+bool ldrInicializado = false;
 
 bool INVERTER_LDR = false;
 bool RELE_ATIVO_LOW = false; // false = HIGH(3.3V) liga o relé | true = LOW(0V) liga o relé
@@ -86,6 +88,10 @@ bool RELE_ATIVO_LOW = false; // false = HIGH(3.3V) liga o relé | true = LOW(0V)
 bool modoAutomatico = true;
 bool servoProporcional = false;
 int anguloPersiana = 90;
+int zonaLuzAuto = -1; // -1 = inicial, 0 = Escuro (0°), 1 = Normal (90°), 2 = Sol Forte (160°)
+unsigned long lastServoAutoMove = 0;
+const unsigned long SERVO_AUTO_COOLDOWN_MS = 3000;
+const int HYST_LUZ = 5; // Histerese de ±5% evita oscilação e apitos no modo AUTO
 bool saidaEstado[4] = {false, false, false, false}; // [0:Relé1 Ventoinha, 1:Relé2 Cultivo, 2:Relé3 Irrig, 3:Relé4 Aquec]
 bool alarmeAtivo = false;
 bool buzzerMute = false;
@@ -125,17 +131,33 @@ void agendarTelemetriaImediata(unsigned long delayMs = 140) {
 }
 
 // ================= 3. ATUAÇÃO FÍSICA (SERVO, 4 RELÉS, LEDS, BUZZER) =================
-void aplicarAnguloPersiana(int novoAngulo) {
+void escreverPwmServo(int angulo) {
+  angulo = constrain(angulo, 0, 180);
+  uint32_t pulseUs = map(angulo, 0, 180, 550, 2400);
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3)
+  // PWM nativo LEDC 50 Hz (14 bits) no ESP32-S3 — imune a bugs de timer do ESP32Servo no Core 3.x
+  uint32_t duty = (pulseUs * 16383UL) / 20000UL;
+  ledcWrite(PIN_SERVO, duty);
+#else
+  if (!servoPersiana.attached()) {
+    servoPersiana.setPeriodHertz(50);
+    servoPersiana.attach(PIN_SERVO, 550, 2400);
+  }
+  servoPersiana.writeMicroseconds(pulseUs);
+#endif
+  Serial.printf("[SERVO] GPIO %d -> %d graus (%lu us | Luz: %d%%)\n", PIN_SERVO, angulo, pulseUs, luzPercent);
+}
+
+void aplicarAnguloPersiana(int novoAngulo, bool emitirBip = true, bool forcarEnvio = false) {
   novoAngulo = constrain(novoAngulo, 0, 180);
-  if (abs(novoAngulo - anguloPersiana) >= 2) {
-    if (!buzzerMute && !servoProporcional) {
+  if (forcarEnvio || abs(novoAngulo - anguloPersiana) >= 2) {
+    if (emitirBip && !buzzerMute && !servoProporcional) {
       digitalWrite(PIN_BUZZER, HIGH);
       delay(25);
       digitalWrite(PIN_BUZZER, LOW);
     }
     anguloPersiana = novoAngulo;
-    servoPersiana.write(anguloPersiana);
-    Serial.printf("[SERVO] Persiana movida para %d graus (Luz: %d%%)\n", anguloPersiana, luzPercent);
+    escreverPwmServo(anguloPersiana);
   }
 }
 
@@ -143,10 +165,10 @@ void atualizarSaidasFisicas() {
   int onLevel  = RELE_ATIVO_LOW ? LOW  : HIGH;
   int offLevel = RELE_ATIVO_LOW ? HIGH : LOW;
 
-  digitalWrite(PIN_RELE1, saidaEstado[0] ? onLevel : offLevel); // Pino 47: Mód.1 D1 (Ventoinha)
-  digitalWrite(PIN_RELE2, saidaEstado[1] ? onLevel : offLevel); // Pino 48: Mód.1 D2 (Iluminação)
-  digitalWrite(PIN_RELE3, saidaEstado[2] ? onLevel : offLevel); // Pino 33: Mód.2 D1 (Irrigação)
-  digitalWrite(PIN_RELE4, saidaEstado[3] ? onLevel : offLevel); // Pino 34: Mód.2 D2 (Aquecedor)
+  digitalWrite(PIN_RELE1, saidaEstado[0] ? onLevel : offLevel); // Pino 47: Canal 1 / IN1 (Ventoinha)
+  digitalWrite(PIN_RELE2, saidaEstado[1] ? onLevel : offLevel); // Pino 48: Canal 2 / IN2 (Iluminação)
+  digitalWrite(PIN_RELE3, saidaEstado[2] ? onLevel : offLevel); // Pino 33: Canal 3 / IN3 (Irrigação)
+  digitalWrite(PIN_RELE4, saidaEstado[3] ? onLevel : offLevel); // Pino 34: Canal 4 / IN4 (Aquecedor)
 
   // O LED Branco da própria placa Heltec (GPIO 35) acende se qualquer relé estiver ativo
   digitalWrite(LED_ONBOARD, (saidaEstado[0] || saidaEstado[1] || saidaEstado[2] || saidaEstado[3]) ? HIGH : LOW);
@@ -166,15 +188,25 @@ void atualizarSaidasFisicas() {
 unsigned long lastDhtRead = 0;
 
 void lerSensores() {
+  // Amostra distribuída ao longo de ~16ms para eliminar flicker de lâmpadas 60Hz/120Hz
   long somaAdc = 0;
   for (int i = 0; i < 8; i++) {
     somaAdc += analogRead(PIN_LDR);
+    delay(2);
   }
   adcLdrBruto = somaAdc / 8;
 
   int pct = map(adcLdrBruto, 0, 4095, 0, 100);
   pct = constrain(pct, 0, 100);
-  luzPercent = INVERTER_LDR ? (100 - pct) : pct;
+  int luzInstantanea = INVERTER_LDR ? (100 - pct) : pct;
+
+  if (!ldrInicializado) {
+    luzFiltrada = luzInstantanea;
+    ldrInicializado = true;
+  } else {
+    luzFiltrada = (luzFiltrada * 0.7f) + (luzInstantanea * 0.3f);
+  }
+  luzPercent = (int)round(luzFiltrada);
 
   if (millis() - lastDhtRead >= 2000) {
     lastDhtRead = millis();
@@ -191,23 +223,40 @@ void lerSensores() {
 }
 
 void executarControleAutomatico() {
-  if (!modoAutomatico) return;
+  if (!modoAutomatico) {
+    zonaLuzAuto = -1;
+    return;
+  }
 
   if (servoProporcional) {
     int angAlvo = map(luzPercent, 0, 100, 0, 180);
-    aplicarAnguloPersiana(angAlvo);
+    if (abs(angAlvo - anguloPersiana) >= 8) {
+      aplicarAnguloPersiana(angAlvo, false);
+    }
     saidaEstado[1] = (luzPercent < cfgLuzBaixa);
   } else {
-    if (luzPercent < cfgLuzBaixa) {
-      aplicarAnguloPersiana(0);
-      saidaEstado[1] = true;
-    } else if (luzPercent > cfgLuzAlta) {
-      aplicarAnguloPersiana(160);
-      saidaEstado[1] = false;
+    // Controle com histerese (±5%) para impedir troca repetitiva de zona e apitos no modo AUTO
+    int novaZona = zonaLuzAuto;
+    if (zonaLuzAuto < 0) {
+      if (luzPercent < cfgLuzBaixa) novaZona = 0;
+      else if (luzPercent > cfgLuzAlta) novaZona = 2;
+      else novaZona = 1;
+    } else if (zonaLuzAuto == 0) {
+      if (luzPercent > cfgLuzBaixa + HYST_LUZ) novaZona = 1;
+    } else if (zonaLuzAuto == 2) {
+      if (luzPercent < cfgLuzAlta - HYST_LUZ) novaZona = 1;
     } else {
-      aplicarAnguloPersiana(90);
-      saidaEstado[1] = false;
+      if (luzPercent < cfgLuzBaixa) novaZona = 0;
+      else if (luzPercent > cfgLuzAlta) novaZona = 2;
     }
+
+    if (novaZona != zonaLuzAuto && (zonaLuzAuto < 0 || millis() - lastServoAutoMove >= SERVO_AUTO_COOLDOWN_MS)) {
+      zonaLuzAuto = novaZona;
+      lastServoAutoMove = millis();
+      int angAlvo = (zonaLuzAuto == 0) ? 0 : (zonaLuzAuto == 2 ? 160 : 90);
+      aplicarAnguloPersiana(angAlvo, false); // Sem bip no ajuste automático!
+    }
+    saidaEstado[1] = (zonaLuzAuto == 0);
   }
 
   saidaEstado[0] = (tempAtual > cfgTempMax || umidAtual > 80.0);
@@ -371,7 +420,7 @@ void processarComandoJson(const String& jsonStr) {
     executarControleAutomatico();
   } else {
     if (doc["srv"].is<int>()) {
-      aplicarAnguloPersiana(doc["srv"].as<int>());
+      aplicarAnguloPersiana(doc["srv"].as<int>(), true, true);
     }
     if (doc["r"].is<JsonArray>()) {
       JsonArray arr = doc["r"].as<JsonArray>();
@@ -452,12 +501,12 @@ void configurarRotasWeb() {
     html += "<form action='/servo?ang=160' method='POST'><button class='btn' type='submit'>Sombra (160°)</button></form>";
     html += "</div></div>";
 
-    html += "<div class='card'><h3>Controle dos 2 Módulos Relé Duplos (Pinos 47, 48, 33, 34)</h3><div class='grid'>";
+    html += "<div class='card'><h3>Controle do Módulo Relé 4 Canais (Pinos 47, 48, 33, 34)</h3><div class='grid'>";
     const char* nomesSaida[4] = {
-      "Mód.1 D1 Ventoinha (P47)",
-      "Mód.1 D2 Iluminação (P48)",
-      "Mód.2 D1 Irrigação (P33)",
-      "Mód.2 D2 Aquecedor (P34)"
+      "Relé 1 Ventoinha (P47)",
+      "Relé 2 Iluminação (P48)",
+      "Relé 3 Irrigação (P33)",
+      "Relé 4 Aquecedor (P34)"
     };
     for (int i = 0; i < 4; i++) {
       html += "<form action='/rele?ch=" + String(i) + "' method='POST'>";
@@ -489,7 +538,7 @@ void configurarRotasWeb() {
   server.on("/servo", HTTP_POST, []() {
     modoAutomatico = false;
     int ang = server.arg("ang").toInt();
-    aplicarAnguloPersiana(ang);
+    aplicarAnguloPersiana(ang, true, true);
     atualizarDisplayOLED();
     agendarTelemetriaImediata(80);
     server.sendHeader("Location", "/");
@@ -530,10 +579,17 @@ void setup() {
   pinMode(PIN_LDR, INPUT);
   dht.begin();
 
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3)
+  ledcAttach(PIN_SERVO, 50, 14);
+#else
   ESP32PWM::allocateTimer(0);
+  ESP32PWM::allocateTimer(1);
+  ESP32PWM::allocateTimer(2);
+  ESP32PWM::allocateTimer(3);
   servoPersiana.setPeriodHertz(50);
-  servoPersiana.attach(PIN_SERVO, 500, 2400);
-  servoPersiana.write(anguloPersiana);
+  servoPersiana.attach(PIN_SERVO, 550, 2400);
+#endif
+  escreverPwmServo(anguloPersiana);
 
   pinMode(VEXT_CTRL, OUTPUT);
   digitalWrite(VEXT_CTRL, LOW);

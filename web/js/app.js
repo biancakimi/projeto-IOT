@@ -185,20 +185,19 @@ function atualizarInterfaceTelemetria(dados) {
 function publicarComandoMqtt(topico, payloadObj) {
   const payloadStr = typeof payloadObj === "string" ? payloadObj : JSON.stringify(payloadObj);
 
-  // 1. Envia em tempo real via MQTT WebSockets
+  // 1. Envia em tempo real via MQTT WebSockets (evita comandos duplicados/atrasados no servo)
   if (mqttClient && mqttClient.connected) {
     mqttClient.publish(topico, payloadStr, { qos: 0, retain: false });
     adicionarLog("tx", `ORDEM MQTT -> ${topico}: ${payloadStr}`);
   } else {
+    // 2. Fallback via API da Vercel (/api/historico?tipo=comando) apenas quando MQTT estiver desconectado
     adicionarLog("sys", "⚠️ MQTT reconectando — enviando ordem via API da Vercel...");
+    fetch("/api/historico?tipo=comando", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payloadStr
+    }).catch(() => {});
   }
-
-  // 2. Também enfileira na API da Vercel (/api/historico?tipo=comando) para redundância HTTPS
-  fetch("/api/historico?tipo=comando", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: payloadStr
-  }).catch(() => {});
 }
 
 function enviarModo(novoModo) {

@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "heltec_iot")(type "KiCad")(uri "${KIPRJMOD}/heltec_iot.pretty")(options "")(descr "Footprints Customizados UNIFESP IoT - Heltec V3"))
+)
