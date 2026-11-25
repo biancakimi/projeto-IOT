@@ -59,7 +59,7 @@ const char* DEFAULT_MQTT_HOST   = "broker.emqx.io";
 const uint16_t DEFAULT_MQTT_PORT = 1883;
 
 // URL da API Serverless na Vercel (também editável pelo celular em http://192.168.4.1)
-const char* DEFAULT_VERCEL_URL  = "https://projeto-iot.vercel.app/api/historico";
+const char* DEFAULT_VERCEL_URL  = "https://projeto-iot-eight.vercel.app/api/historico";
 
 // Ponto de Acesso local do ESP 2 para configuração e diagnóstico
 const char* GW_AP_SSID          = "Gateway_LoRa_V3";
@@ -652,6 +652,9 @@ void setup() {
   if (String(DEFAULT_WIFI_SSID) != "SEU_WIFI_AQUI" && wifiSsid == "SEU_WIFI_AQUI") {
     wifiSsid = DEFAULT_WIFI_SSID;
     wifiPass = DEFAULT_WIFI_PASS;
+  }
+  if (vercelApiUrl == "https://projeto-iot.vercel.app/api/historico" || vercelApiUrl.length() < 10) {
+    vercelApiUrl = DEFAULT_VERCEL_URL;
   }
 
   // Inicializa Display OLED SSD1306

@@ -34,7 +34,7 @@ Sistema completo de **Internet das Coisas (IoT)** para monitoramento microclimá
 
 Estufas de cultivo frequentemente estão afastadas de pontos de acesso Wi-Fi. Para contornar essa limitação e garantir alta confiabilidade, o **SmartGreenhouse LoRa** organiza a solução em três camadas:
 
-1. **Nó Estufa — ESP 1 (ESP32-S3 Heltec WiFi LoRa 32 V3 — Remoto):** Instalado na estufa sem necessidade de internet local. Realiza a leitura contínua de **luminosidade (LDR no GPIO 4)** e **temperatura e umidade do ar (DHT11 no GPIO 5)**, exibe o diagnóstico no **Display OLED SSD1306 integrado**, controla o ângulo da **persiana via 1 servomotor (GPIO 6)**, aciona **2 módulos Relé de 2 Canais 5V (totalizando 4 canais ativos em HIGH nos GPIOs 47, 48, 33 e 34)** (Ventoinha 5V de exaustão no canal `D1/IN1` do Módulo 1, iluminação de cultivo no `D2/IN2` do Módulo 1, bomba de irrigação no `D1/IN1` do Módulo 2 e aquecedor no `D2/IN2` do Módulo 2) e sinaliza status localmente (**LEDs Verde/Vermelho e Buzzer**). Transmite telemetria via **LoRa 915 MHz** a cada 5s (e imediatamente após executar qualquer comando recebido do ESP 2) e mantém controle autônomo local (*fail-safe*).
+1. **Nó Estufa — ESP 1 (ESP32-S3 Heltec WiFi LoRa 32 V3 — Remoto):** Instalado na estufa sem necessidade de internet local. Realiza a leitura contínua de **luminosidade (LDR no GPIO 4)** e **temperatura e umidade do ar (DHT11 no GPIO 5)**, exibe o diagnóstico no **Display OLED SSD1306 integrado**, controla o ângulo da **persiana via 1 servomotor (GPIO 6)**, aciona **1 Módulo Relé de 4 Canais 5V (nos GPIOs 47, 48, 33 e 34)** (Ventoinha 5V de exaustão, iluminação de cultivo, bomba de irrigação e aquecedor) e sinaliza status localmente (**LEDs Verde/Vermelho com resistores de 1 kΩ e Buzzer**). Transmite telemetria via **LoRa 915 MHz** a cada 5s (e imediatamente após executar qualquer comando recebido do ESP 2) e mantém controle autônomo local (*fail-safe*).
 2. **Nó Gateway — ESP 2 (ESP32-S3 Heltec WiFi LoRa 32 V3 — Central):** Localizado na sede com conexão Wi-Fi 2.4 GHz. Recebe os pacotes LoRa em 915 MHz vindos do ESP 1 (via transceptor Semtech SX1262), afere a qualidade do enlace de rádio (`RSSI` em dBm e `SNR` em dB) e encaminha os dados simultaneamente para o **Broker MQTT (`broker.emqx.io`)** e via **HTTPS POST para a API Serverless da Vercel (`/api/historico`)**. No sentido inverso, recebe ordens enviadas pelo Site Web ou Node-RED e as transmite imediatamente via **LoRa 915 MHz** para o ESP 1. Conta ainda com portal web local (`Gateway_LoRa_V3` $\rightarrow$ `http://192.168.4.1`) para configuração dinâmica de Wi-Fi/MQTT e suporte a **atualização remota de firmware (ArduinoOTA)**.
 3. **Nuvem, Banco de Dados e Site Web:**
    * **API Serverless Vercel (`api/historico.js`) + Neon PostgreSQL:** Cria automaticamente as tabelas `historico_estufa` e `comandos_estufa`, armazena a série temporal completa de leituras/estados e enfileira comandos remotos para o Gateway.
@@ -52,7 +52,7 @@ flowchart LR
         LDR["Sensor LDR (GPIO 4)"] --> ESP_EST["ESP32-S3 Heltec V3\n+ OLED SSD1306"]
         DHT["Sensor DHT11 (GPIO 5)"] --> ESP_EST
         ESP_EST --> SERVO["1x Servomotor\n(Persiana 0°–180° - GPIO 6)"]
-        ESP_EST --> RELES["2x Módulos Relé 2 Canais (5V)\n(Mód.1 D1 Ventoinha | Mód.1 D2 Iluminação |\nMód.2 D1 Irrigação | Mód.2 D2 Aquecedor)"]
+        ESP_EST --> RELES["1x Módulo Relé 4 Canais (5V)\n(CH1 Ventoinha P47 | CH2 Iluminação P48 |\nCH3 Irrigação P33 | CH4 Aquecedor P34)"]
         ESP_EST --> ALARME["LEDs Status + Buzzer (GPIO 40, 41, 42)"]
     end
 
@@ -93,11 +93,11 @@ O Nó Estufa avalia continuamente os sensores a cada ciclo curto (~600 ms para L
   * **Escuro / Tampando o LDR (`Luz < 25%`):** Persiana fecha em **`0°` (Fechada)** para isolamento térmico e **LIGA o Relé 2 (Iluminação de Cultivo)** para suplementação luminosa.
   * **Luz Ambiente Normal (`25% <= Luz <= 75%`):** Persiana abre em **`90°` (Aberta)** para máximo aproveitamento da luz solar e ventilação natural, **DESLIGANDO o Relé 2**.
   * **Sol Muito Forte / Lanterna no LDR (`Luz > 75%`):** Persiana inclina para **`160°` (Sombreamento)** para proteger as plantas contra insolação excessiva e queima de folhas.
-* **Controle dos 2 Módulos Relé de 2 Canais (4 Saídas 5V Ativas em HIGH — Lado do Pino 47):**
-  * **Módulo 1 (`D1 / IN1`) — Ventoinha 5V (Exaustor / Refrigeração):** Liga quando `Temperatura > 28 °C` ou `Umidade > 80%`.
-  * **Módulo 1 (`D2 / IN2`) — Iluminação Artificial (Cultivo):** Liga automaticamente quando `Luz < 25%`.
-  * **Módulo 2 (`D1 / IN1`) — Bomba de Irrigação / Nebulização:** Liga quando `Umidade < 45%`.
-  * **Módulo 2 (`D2 / IN2`) — Aquecedor Térmico:** Liga quando `Temperatura < 18 °C`.
+* **Controle do Módulo Relé de 4 Canais 5V (Lado do Pino 47):**
+  * **Canal 1 (`IN1`) — Ventoinha 5V (Exaustor / Refrigeração):** Liga quando `Temperatura > 28 °C` ou `Umidade > 80%`.
+  * **Canal 2 (`IN2`) — Iluminação Artificial (Cultivo):** Liga automaticamente quando `Luz < 25%`.
+  * **Canal 3 (`IN3`) — Bomba de Irrigação / Nebulização:** Liga quando `Umidade < 45%`.
+  * **Canal 4 (`IN4`) — Aquecedor Térmico:** Liga quando `Temperatura < 18 °C`.
 * **Alarme Audiovisual Local (Buzzer + LEDs):**
   * **LED Verde (GPIO 41):** Aceso contínuo durante operação normal.
   * **LED Vermelho (GPIO 40) + Buzzer (GPIO 42):** Acionados em caso de emergência climática (`Temperatura >= 35 °C`), forçando a Ventoinha (Relé 1) a ligar e transmitindo status de alerta via LoRa/MQTT.
@@ -126,10 +126,10 @@ O circuito do Nó Estufa foi dimensionado para a placa **Heltec WiFi LoRa 32 V3 
 | **Sensor LDR (Luminosidade)** | `GPIO 4` | Entrada Analógica (ADC1) | Divisor de tensão com resistor de $10\text{ k}\Omega$ para medição de luz (%) |
 | **Sensor DHT11 (Temp. e Umidade)** | `GPIO 5` | Digital One-Wire | Medição de temperatura (°C) e umidade relativa (%) |
 | **Servomotor da Persiana** | `GPIO 6` | Saída PWM (50 Hz) | Controle do ângulo das aletas da persiana ($0^\circ$ a $180^\circ$) |
-| **Módulo Relé 1 (`D1 / IN1`) — Ventoinha 5V** | `GPIO 47` | Saída Digital (HIGH=ON) | Aciona a **Ventoinha 5V** (Exaustor no contato `NA` do canal `D1`) |
-| **Módulo Relé 1 (`D2 / IN2`) — Iluminação** | `GPIO 48` | Saída Digital (HIGH=ON) | Aciona a **Iluminação Artificial** (Cultivo no canal `D2`) |
-| **Módulo Relé 2 (`D1 / IN1`) — Irrigação** | `GPIO 33` | Saída Digital (HIGH=ON) | Aciona a **Bomba de Irrigação / Válvula** (canal `D1` do 2º módulo) |
-| **Módulo Relé 2 (`D2 / IN2`) — Aquecedor** | `GPIO 34` | Saída Digital (HIGH=ON) | Aciona o **Aquecedor Térmico** (canal `D2` do 2º módulo) |
+| **Relé 4 Canais (`CH1`) — Ventoinha 5V** | `GPIO 47` | Saída Digital | Aciona a **Ventoinha 5V** (Exaustor no contato `NA` do canal 1) |
+| **Relé 4 Canais (`CH2`) — Iluminação** | `GPIO 48` | Saída Digital | Aciona a **Iluminação Artificial** (Cultivo no canal 2) |
+| **Relé 4 Canais (`CH3`) — Irrigação** | `GPIO 33` | Saída Digital | Aciona a **Bomba de Irrigação / Válvula** (canal 3) |
+| **Relé 4 Canais (`CH4`) — Aquecedor** | `GPIO 34` | Saída Digital | Aciona o **Aquecedor Térmico** (canal 4) |
 | **Buzzer de Alerta** | `GPIO 42` | Saída Digital | Alarme sonoro local de emergência e movimentação |
 | **LED Status Verde** | `GPIO 41` | Saída Digital | Indicação visual de operação normal |
 | **LED Status Vermelho** | `GPIO 40` | Saída Digital | Indicação visual de alarme crítico |
