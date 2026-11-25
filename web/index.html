@@ -3,270 +3,303 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SmartGreenhouse LoRa — Painel IoT (ESP1 Estufa &harr; ESP2 Gateway &harr; Nuvem)</title>
+  <title>Estufa LoRa — Monitoramento e Controle | UNIFESP</title>
   <link rel="stylesheet" href="css/styles.css" />
-  <!-- MQTT.js (WebSockets) e Chart.js -->
   <script src="https://unpkg.com/mqtt@5.10.3/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <header class="topbar">
-    <div class="topbar-brand">
-      <span class="brand-icon">🌱</span>
-      <div>
-        <h1>SmartGreenhouse LoRa 915 MHz</h1>
-        <p class="subtitle">UNIFESP IoT — ESP 1 (Estufa) &harr; LoRa SX1262 &harr; ESP 2 (Gateway MQTT) &harr; Web</p>
+    <div class="topbar-inner">
+      <div class="topbar-brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/>
+            <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+          </svg>
+        </div>
+        <div>
+          <h1>Estufa LoRa <span class="freq-tag">915 MHz</span></h1>
+          <p class="subtitle">Monitoramento microclimático · UNIFESP ICT-SJC</p>
+        </div>
       </div>
-    </div>
-    <div class="topbar-status">
-      <div class="badge" id="badgeMqtt">
-        <span class="dot dot-Wait" id="dotMqtt"></span>
-        <span id="txtMqttStatus">MQTT: Conectando...</span>
-      </div>
-      <div class="badge" id="badgeGw">
-        <span class="dot dot-off" id="dotGw"></span>
-        <span id="txtGwStatus">ESP 2 Gateway: Aguardando</span>
-      </div>
-      <div class="badge" id="badgeLoRa">
-        <span class="dot dot-off" id="dotLoRa"></span>
-        <span id="txtLoRaStatus">ESP 1 LoRa: -- dBm</span>
+
+      <div class="topbar-status">
+        <div class="status-chip" id="badgeMqtt">
+          <span class="dot dot-wait" id="dotMqtt"></span>
+          <span id="txtMqttStatus">MQTT: conectando</span>
+        </div>
+        <div class="status-chip" id="badgeGw">
+          <span class="dot dot-off" id="dotGw"></span>
+          <span id="txtGwStatus">Gateway: aguardando</span>
+        </div>
+        <div class="status-chip" id="badgeLoRa">
+          <span class="dot dot-off" id="dotLoRa"></span>
+          <span id="txtLoRaStatus">LoRa: -- dBm</span>
+        </div>
       </div>
     </div>
   </header>
 
-  <!-- Banner de Alarme Crítico -->
-  <div id="alarmBanner" class="alarm-banner hidden">
-    ⚠️ <strong>ALARME CRÍTICO DE TEMPERATURA NA ESTUFA!</strong> Ventoinha de exaustão acionada em emergência.
+  <div id="alarmBanner" class="alarm-banner hidden" role="alert">
+    <strong>Alarme de temperatura crítica:</strong> exaustor acionado automaticamente na estufa.
   </div>
 
   <main class="container">
-    <!-- 1. CARDS DE TELEMETRIA EM TEMPO REAL (ESP 1 -> LORA -> ESP 2 -> MQTT) -->
+    <!-- Leituras atuais -->
     <section class="section-block">
       <div class="section-header">
-        <h2>📡 Telemetria em Tempo Real (Captada pelo ESP 1 via LoRa)</h2>
-        <div class="header-actions">
-          <span class="last-update" id="txtLastUpdate">Último pacote: --</span>
-          <button class="btn btn-sm btn-outline" id="btnPingLoRa" title="Pede ao ESP 2 para enviar um PING via LoRa ao ESP 1">
-            🔄 Solicitar Leitura (PING LoRa)
-          </button>
+        <div>
+          <h2>Leituras atuais</h2>
+          <span class="last-update" id="txtLastUpdate">Aguardando primeiro pacote</span>
         </div>
+        <button class="btn btn-outline btn-sm" id="btnPingLoRa" title="Solicita uma leitura imediata ao nó da estufa via LoRa">
+          Atualizar leitura
+        </button>
       </div>
 
       <div class="telemetry-grid">
-        <!-- Temperatura -->
-        <div class="card metric-card">
+        <article class="card metric-card">
           <div class="metric-top">
-            <span class="metric-label">🌡️ Temperatura (DHT11 P5)</span>
-            <span class="pill" id="pillDht">DHT11</span>
+            <span class="metric-label">Temperatura</span>
+            <span class="tag" id="pillDht">DHT11 · P5</span>
           </div>
-          <div class="metric-value"><span id="valTemp">--.-</span> <small>°C</small></div>
-          <div class="progress-bar"><div class="progress-fill fill-temp" id="barTemp" style="width: 0%"></div></div>
-          <div class="metric-foot">Faixa ideal: <span id="lblRangeTemp">18°C – 28°C</span></div>
-        </div>
+          <div class="metric-value"><span id="valTemp">--.-</span><small>°C</small></div>
+          <div class="meter"><div class="meter-fill fill-temp" id="barTemp" style="width: 0%"></div></div>
+          <div class="metric-foot">Faixa alvo: <span id="lblRangeTemp">18°C – 28°C</span></div>
+        </article>
 
-        <!-- Umidade -->
-        <div class="card metric-card">
+        <article class="card metric-card">
           <div class="metric-top">
-            <span class="metric-label">💧 Umidade do Ar (DHT11 P5)</span>
-            <span class="pill pill-blue">Relativa</span>
+            <span class="metric-label">Umidade relativa</span>
+            <span class="tag">DHT11 · P5</span>
           </div>
-          <div class="metric-value"><span id="valUmid">--</span> <small>%</small></div>
-          <div class="progress-bar"><div class="progress-fill fill-umid" id="barUmid" style="width: 0%"></div></div>
-          <div class="metric-foot">Mínimo p/ Irrigação: <span id="lblMinUmid">45%</span></div>
-        </div>
+          <div class="metric-value"><span id="valUmid">--</span><small>%</small></div>
+          <div class="meter"><div class="meter-fill fill-umid" id="barUmid" style="width: 0%"></div></div>
+          <div class="metric-foot">Irrigação abaixo de <span id="lblMinUmid">45%</span></div>
+        </article>
 
-        <!-- Luminosidade LDR -->
-        <div class="card metric-card">
+        <article class="card metric-card">
           <div class="metric-top">
-            <span class="metric-label">☀️ Luminosidade (LDR P4)</span>
-            <span class="pill pill-amber" id="pillAdc">ADC: --</span>
+            <span class="metric-label">Luminosidade</span>
+            <span class="tag mono" id="pillAdc">ADC --</span>
           </div>
-          <div class="metric-value"><span id="valLuz">--</span> <small>%</small></div>
-          <div class="progress-bar"><div class="progress-fill fill-luz" id="barLuz" style="width: 0%"></div></div>
-          <div class="metric-foot">Baixa &lt; 25% | Sombra &gt; 75%</div>
-        </div>
+          <div class="metric-value"><span id="valLuz">--</span><small>%</small></div>
+          <div class="meter"><div class="meter-fill fill-luz" id="barLuz" style="width: 0%"></div></div>
+          <div class="metric-foot">Baixa &lt; 25% · Sombra &gt; 75%</div>
+        </article>
 
-        <!-- Enlace LoRa 915 MHz -->
-        <div class="card metric-card">
+        <article class="card metric-card">
           <div class="metric-top">
-            <span class="metric-label">📶 Rádio LoRa 915 MHz (ESP1&rarr;ESP2)</span>
-            <span class="pill pill-purple" id="pillSeq">Pacote #--</span>
+            <span class="metric-label">Enlace LoRa</span>
+            <span class="tag mono" id="pillSeq">#--</span>
           </div>
-          <div class="metric-value"><span id="valRssi">--</span> <small>dBm</small></div>
-          <div class="progress-bar"><div class="progress-fill fill-lora" id="barRssi" style="width: 0%"></div></div>
-          <div class="metric-foot">SNR: <strong id="valSnr">-- dB</strong> | GW IP: <span id="valGwIp">--</span></div>
-        </div>
+          <div class="metric-value"><span id="valRssi">--</span><small>dBm</small></div>
+          <div class="meter"><div class="meter-fill fill-lora" id="barRssi" style="width: 0%"></div></div>
+          <div class="metric-foot">SNR <strong id="valSnr">-- dB</strong> · IP <span class="mono" id="valGwIp">--</span></div>
+        </article>
       </div>
     </section>
 
-    <!-- 2. PAINEL DE CONTROLE REMOTO (SITE -> MQTT -> ESP 2 -> LORA -> ESP 1) -->
+    <!-- Controle de atuadores -->
     <section class="section-block">
       <div class="section-header">
-        <h2>🎛️ Controle Remoto de Atuadores (Site &rarr; ESP 2 &rarr; LoRa &rarr; ESP 1)</h2>
+        <h2>Atuadores</h2>
         <div class="mode-selector">
-          <span>Modo de Operação da Estufa:</span>
-          <button class="btn btn-mode active" id="btnModoAuto" onclick="enviarModo('AUTO')">🤖 AUTOMÁTICO</button>
-          <button class="btn btn-mode" id="btnModoMan" onclick="enviarModo('MAN')">🖐️ MANUAL</button>
+          <span class="mode-label">Modo:</span>
+          <div class="segmented">
+            <button class="seg-btn active" id="btnModoAuto" onclick="enviarModo('AUTO')">Automático</button>
+            <button class="seg-btn" id="btnModoMan" onclick="enviarModo('MAN')">Manual</button>
+          </div>
         </div>
       </div>
 
-      <div class="control-grid">
-        <!-- Controle da Persiana (Servomotor Pino 6) -->
-        <div class="card control-card">
+      <div class="two-col-grid">
+        <div class="card">
           <div class="card-title-row">
-            <h3>🪟 Persiana Motorizada (Servomotor — Pino 6)</h3>
-            <span class="pill pill-green" id="lblEstadoPersiana">90° (Aberta)</span>
+            <div>
+              <h3>Persiana motorizada</h3>
+              <p class="card-sub">Servomotor · GPIO 6</p>
+            </div>
+            <span class="tag tag-accent" id="lblEstadoPersiana">90° (Aberta)</span>
           </div>
-          <p class="card-desc">
-            Ao ajustar o ângulo da persiana, o site envia a ordem via MQTT para o <strong>ESP 2</strong>, que transmite via <strong>LoRa 915 MHz</strong> para o <strong>ESP 1</strong> mover o servomotor.
-          </p>
 
-          <div class="servo-slider-box">
+          <div class="servo-box">
+            <div class="servo-top">
+              <span class="servo-caption">Ângulo desejado</span>
+              <strong class="mono" id="lblSliderPreview">90°</strong>
+            </div>
             <input type="range" id="sliderServo" min="0" max="180" step="5" value="90" />
-            <div class="servo-slider-labels">
-              <span>0° (Fechada)</span>
-              <strong id="lblSliderPreview">90°</strong>
-              <span>180° (Sombra Máx)</span>
+            <div class="servo-scale">
+              <span>0° fechada</span>
+              <span>90° aberta</span>
+              <span>180° sombra</span>
             </div>
             <button class="btn btn-primary btn-block" id="btnAplicarServo">
-              Enviar Ângulo da Persiana via LoRa
+              Aplicar ângulo
             </button>
           </div>
 
           <div class="preset-grid">
-            <button class="btn btn-preset" onclick="enviarPersiana(0)">🌑 Fechar (0°)</button>
-            <button class="btn btn-preset" onclick="enviarPersiana(45)">🌤️ Meia-Luz (45°)</button>
-            <button class="btn btn-preset" onclick="enviarPersiana(90)">☀️ Abrir (90°)</button>
-            <button class="btn btn-preset" onclick="enviarPersiana(160)">⛱️ Sombra (160°)</button>
+            <button class="btn btn-subtle" onclick="enviarPersiana(0)">0° Fechada</button>
+            <button class="btn btn-subtle" onclick="enviarPersiana(45)">45° Meia-luz</button>
+            <button class="btn btn-subtle" onclick="enviarPersiana(90)">90° Aberta</button>
+            <button class="btn btn-subtle" onclick="enviarPersiana(160)">160° Sombra</button>
           </div>
         </div>
 
-        <!-- Controle do Módulo Relé de 4 Canais (Lado do Pino 47) -->
-        <div class="card control-card">
+        <div class="card">
           <div class="card-title-row">
-            <h3>⚡ Módulo Relé de 4 Canais (Pinos 47, 48, 33 e 34)</h3>
-            <span class="pill" id="pillLogicaRele">Ativo em HIGH</span>
+            <div>
+              <h3>Módulo relé (4 canais)</h3>
+              <p class="card-sub">Acionamento manual alterna o nó para modo Manual</p>
+            </div>
+            <span class="tag" id="pillLogicaRele">Ativo em HIGH</span>
           </div>
-          <p class="card-desc">
-            Clique em qualquer canal para ligar/desligar remotamente no <strong>ESP 1</strong> (coloca a estufa em modo Manual automaticamente).
-          </p>
 
           <div class="relays-grid">
             <button class="relay-btn off" id="btnRele0" onclick="alternarRele(0)">
-              <div class="relay-icon">🌀</div>
               <div class="relay-info">
-                <strong>Relé 1 (CH1 — P47)</strong>
-                <span>Ventoinha / Exaustor 5V</span>
+                <strong>Ventoinha / Exaustor</strong>
+                <span class="mono">CH1 · GPIO 47</span>
               </div>
-              <span class="relay-badge" id="stateRele0">OFF</span>
+              <span class="relay-state" id="stateRele0">OFF</span>
             </button>
 
             <button class="relay-btn off" id="btnRele1" onclick="alternarRele(1)">
-              <div class="relay-icon">💡</div>
               <div class="relay-info">
-                <strong>Relé 2 (CH2 — P48)</strong>
-                <span>Iluminação de Cultivo</span>
+                <strong>Iluminação de cultivo</strong>
+                <span class="mono">CH2 · GPIO 48</span>
               </div>
-              <span class="relay-badge" id="stateRele1">OFF</span>
+              <span class="relay-state" id="stateRele1">OFF</span>
             </button>
 
             <button class="relay-btn off" id="btnRele2" onclick="alternarRele(2)">
-              <div class="relay-icon">🚿</div>
               <div class="relay-info">
-                <strong>Relé 3 (CH3 — P33)</strong>
-                <span>Bomba de Irrigação</span>
+                <strong>Bomba de irrigação</strong>
+                <span class="mono">CH3 · GPIO 33</span>
               </div>
-              <span class="relay-badge" id="stateRele2">OFF</span>
+              <span class="relay-state" id="stateRele2">OFF</span>
             </button>
 
             <button class="relay-btn off" id="btnRele3" onclick="alternarRele(3)">
-              <div class="relay-icon">🔥</div>
               <div class="relay-info">
-                <strong>Relé 4 (CH4 — P34)</strong>
-                <span>Aquecedor Térmico</span>
+                <strong>Aquecedor térmico</strong>
+                <span class="mono">CH4 · GPIO 34</span>
               </div>
-              <span class="relay-badge" id="stateRele3">OFF</span>
+              <span class="relay-state" id="stateRele3">OFF</span>
             </button>
           </div>
 
           <div class="utility-row">
-            <button class="btn btn-outline" id="btnToggleInvRele" onclick="alternarPolaridadeReles()">
-              🔄 Lógica Relés: <span id="txtInvRele">HIGH (3.3V Liga)</span>
+            <button class="btn btn-outline btn-sm" id="btnToggleInvRele" onclick="alternarPolaridadeReles()">
+              Lógica: <span id="txtInvRele">HIGH (3.3V)</span>
             </button>
-            <button class="btn btn-outline" id="btnToggleBuzzer" onclick="alternarBuzzer()">
-              🔔 Buzzer (P42): <span id="txtBuzzer">Ativo</span>
+            <button class="btn btn-outline btn-sm" id="btnToggleBuzzer" onclick="alternarBuzzer()">
+              Buzzer (P42): <span id="txtBuzzer">Ativo</span>
             </button>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 3. CONFIGURAÇÃO REMOTA DE SETPOINTS E CONEXÃO MQTT -->
+    <!-- Histórico e gráfico -->
     <section class="section-block">
-      <div class="control-grid">
-        <!-- Setpoints do Modo Automático -->
+      <div class="card">
+        <div class="card-title-row">
+          <div>
+            <h3>Histórico de telemetria</h3>
+            <p class="card-sub">Séries temporais armazenadas no PostgreSQL (Neon)</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-outline btn-sm" onclick="carregarHistoricoBanco()">Recarregar banco</button>
+            <button class="btn btn-outline btn-sm" onclick="salvarLeituraAtualNoBanco()">Salvar leitura</button>
+          </div>
+        </div>
+
+        <div class="chart-wrapper">
+          <canvas id="telemetryChart"></canvas>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Horário</th>
+                <th>Temp.</th>
+                <th>Umid.</th>
+                <th>Luz</th>
+                <th>Persiana</th>
+                <th>Relés (1–4)</th>
+                <th>Modo</th>
+                <th>RSSI</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody">
+              <tr><td colspan="8" class="table-empty">Carregando registros do banco...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Parâmetros e console -->
+    <section class="section-block">
+      <div class="two-col-grid">
         <div class="card">
-          <h3>⚙️ Limiares do Modo Automático (Enviados ao ESP 1 via LoRa)</h3>
+          <div class="card-title-row">
+            <div>
+              <h3>Limiares do modo automático</h3>
+              <p class="card-sub">Parâmetros enviados ao nó da estufa</p>
+            </div>
+          </div>
+
           <div class="cfg-grid">
-            <label>Temp. Máx — Liga Ventoinha (°C)
+            <label>Temp. máx. — ventoinha (°C)
               <input type="number" id="cfgTempMax" value="28" step="0.5" />
             </label>
-            <label>Temp. Mín — Liga Aquecedor (°C)
+            <label>Temp. mín. — aquecedor (°C)
               <input type="number" id="cfgTempMin" value="18" step="0.5" />
             </label>
-            <label>Temp. Crítica — Alarme (°C)
+            <label>Temp. crítica — alarme (°C)
               <input type="number" id="cfgTempCrit" value="35" step="0.5" />
             </label>
-            <label>Umidade Mín — Liga Irrigação (%)
+            <label>Umidade mín. — irrigação (%)
               <input type="number" id="cfgUmidMin" value="45" step="1" />
             </label>
-            <label>Luz Baixa — Fecha Persiana + LED (%)
+            <label>Luz baixa — persiana 0° + LED (%)
               <input type="number" id="cfgLuzMin" value="25" step="1" />
             </label>
-            <label>Luz Alta — Sombreamento 160° (%)
+            <label>Luz alta — sombra 160° (%)
               <input type="number" id="cfgLuzMax" value="75" step="1" />
             </label>
           </div>
           <button class="btn btn-primary btn-block" onclick="enviarConfigLimiares()">
-            💾 Atualizar Setpoints no ESP 1 via LoRa
+            Salvar parâmetros no ESP 1
           </button>
         </div>
 
-        <!-- Log de Comunicação LoRa <-> MQTT -->
         <div class="card">
           <div class="card-title-row">
-            <h3>📟 Monitor de Pacotes em Tempo Real (MQTT &harr; ESP 2 &harr; LoRa)</h3>
-            <button class="btn btn-sm btn-outline" onclick="limparLog()">Limpar</button>
+            <div>
+              <h3>Console de pacotes</h3>
+              <p class="card-sub">Tráfego MQTT em tempo real</p>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="limparLog()">Limpar</button>
           </div>
+
           <div class="broker-bar">
-            <span>Broker WSS:</span>
-            <input type="text" id="inputBrokerUrl" value="wss://broker.emqx.io:8084/mqtt" />
-            <button class="btn btn-sm btn-primary" onclick="conectarMqtt()">Reconectar</button>
+            <input type="text" id="inputBrokerUrl" value="wss://broker.emqx.io:8084/mqtt" aria-label="URL do Broker MQTT WSS" />
+            <button class="btn btn-outline btn-sm" onclick="conectarMqtt()">Reconectar</button>
           </div>
           <div class="log-box" id="logConsole"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 4. GRÁFICO TEMPORAL E HISTÓRICO DO BANCO DE DADOS EM NUVEM -->
-    <section class="section-block">
-      <div class="card">
-        <div class="card-title-row">
-          <h3>📈 Gráfico Temporal &amp; Histórico em Nuvem (PostgreSQL / Neon)</h3>
-          <div class="header-actions">
-            <button class="btn btn-sm btn-outline" onclick="carregarHistoricoBanco()">🔄 Carregar do Banco</button>
-            <button class="btn btn-sm btn-outline" onclick="salvarLeituraAtualNoBanco()">☁️ Salvar Leitura Agora</button>
-          </div>
-        </div>
-        <div class="chart-wrapper">
-          <canvas id="telemetryChart"></canvas>
         </div>
       </div>
     </section>
   </main>
 
   <footer class="footer">
-    <p>Projeto Final de Internet das Coisas (UNIFESP - ICT) • Arquitetura LoRa 915 MHz (ESP1 Estufa &harr; ESP2 Gateway) + MQTT + Cloud DB</p>
+    <p>Internet das Coisas · UNIFESP ICT-SJC · Heltec WiFi LoRa 32 V3 (915 MHz) + MQTT + PostgreSQL</p>
   </footer>
 
   <script src="js/app.js"></script>
